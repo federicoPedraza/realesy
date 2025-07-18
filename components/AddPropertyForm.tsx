@@ -1,0 +1,433 @@
+"use client"
+
+import React, { useState, useEffect } from "react"
+import { useMutation } from "convex/react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, Save, Loader2 } from "lucide-react"
+import { PhotoUpload } from "@/components/PhotoUpload"
+import { CustomFieldsEditor } from "@/components/CustomFieldsEditor"
+import { AmenitiesEditor } from "@/components/AmenitiesEditor"
+import { api } from "@/convex/_generated/api"
+import { Id } from "@/convex/_generated/dataModel"
+import { 
+  PropertyFormData, 
+  CustomFieldFormData, 
+  PropertyAmenityFormData, 
+  FileUpload,
+  ConvexProperty,
+  ConvexCustomField,
+  ConvexPropertyAmenity,
+  ConvexMultimedia,
+  CURRENCIES
+} from "@/types/property"
+
+interface AddPropertyFormProps {
+  onBack: () => void
+  onPropertyCreated: (propertyId: string) => void
+  isEditMode?: boolean
+  propertyId?: Id<"properties"> | null
+  existingProperty?: ConvexProperty | null
+  existingCustomFields?: ConvexCustomField[]
+  existingAmenities?: ConvexPropertyAmenity[]
+  existingMultimedia?: ConvexMultimedia[]
+}
+
+export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
+  onBack,
+  onPropertyCreated,
+  isEditMode = false,
+  propertyId,
+  existingProperty,
+  existingCustomFields = [],
+  existingAmenities = [],
+  existingMultimedia = []
+}) => {
+  const [formData, setFormData] = useState<PropertyFormData>({
+    title: "",
+    description: "",
+    price: 0,
+    currency: "USD",
+    location: "",
+    type: "House",
+    status: "For Sale",
+  })
+
+  const [files, setFiles] = useState<FileUpload[]>([])
+  const [customFields, setCustomFields] = useState<CustomFieldFormData[]>([])
+  const [amenities, setAmenities] = useState<PropertyAmenityFormData[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const createProperty = useMutation(api.properties.createProperty)
+  const updateProperty = useMutation(api.properties.updateProperty)
+  const addCustomField = useMutation(api.properties.addCustomField)
+  const addPropertyAmenity = useMutation(api.properties.addPropertyAmenity)
+  const addMultimedia = useMutation(api.properties.addMultimedia)
+  const createAmenity = useMutation(api.properties.createAmenity)
+  const updateAmenity = useMutation(api.properties.updateAmenity)
+
+  // Pre-populate form when editing
+  useEffect(() => {
+    if (isEditMode && existingProperty) {
+      setFormData({
+        title: existingProperty.title || "",
+        description: existingProperty.description || "",
+        price: existingProperty.price || 0,
+        currency: existingProperty.currency || "USD",
+        location: existingProperty.location || "",
+        type: existingProperty.type || "House",
+        status: existingProperty.status || "For Sale",
+      })
+    }
+  }, [isEditMode, existingProperty])
+
+  // Pre-populate custom fields when editing
+  useEffect(() => {
+    if (isEditMode && existingCustomFields?.length > 0) {
+      const formattedFields: CustomFieldFormData[] = existingCustomFields.map(field => ({
+        name: field.name,
+        value: field.value,
+        fieldType: field.fieldType,
+        unit: field.unit,
+        icon: field.icon,
+      }))
+      setCustomFields(formattedFields)
+    }
+  }, [isEditMode, existingCustomFields])
+
+  // Pre-populate amenities when editing
+  useEffect(() => {
+    if (isEditMode && existingAmenities?.length > 0) {
+      const formattedAmenities: PropertyAmenityFormData[] = existingAmenities.map(amenity => ({
+        amenityId: amenity.amenityId,
+        isAvailable: amenity.isAvailable,
+        notes: amenity.notes,
+      }))
+      setAmenities(formattedAmenities)
+    }
+  }, [isEditMode, existingAmenities])
+
+  // Pre-populate multimedia files when editing (convert to FileUpload format for display)
+  useEffect(() => {
+    if (isEditMode && existingMultimedia?.length > 0) {
+      // For edit mode, we'll show existing multimedia info but handle file uploads separately
+      // Since we can't recreate File objects from URLs, we'll keep this empty for now
+      // and handle existing multimedia display separately in the PhotoUpload component
+      setFiles([])
+    }
+  }, [isEditMode, existingMultimedia])
+
+  const handleInputChange = (field: keyof PropertyFormData, value: string | number | undefined) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+
+    try {
+      // Step 1: Create any new custom amenities first and get their real IDs
+      const amenityIdMap = new Map<string, Id<"amenities">>()
+      
+      for (const amenity of amenities) {
+        if (amenity.amenityId.startsWith('custom-')) {
+          // This is a new custom amenity, create it first
+          const customDetails = amenity.customAmenity
+          const { amenityId: newAmenityId } = await createAmenity({
+            name: customDetails?.name || 'Custom Amenity',
+            icon: customDetails?.icon || "Star",
+            color: customDetails?.color || "text-gray-600",
+            isDefault: false,
+            category: "custom"
+          })
+          amenityIdMap.set(amenity.amenityId, newAmenityId)
+        } else {
+          // Existing amenity, keep the same ID
+          amenityIdMap.set(amenity.amenityId, amenity.amenityId as Id<"amenities">)
+        }
+      }
+
+      // Step 2: Create or update the property
+      let finalPropertyId: Id<"properties">
+
+      if (isEditMode && propertyId) {
+        // Update existing property
+        await updateProperty({
+          propertyId,
+          title: formData.title,
+          description: formData.description,
+          price: formData.price,
+          currency: formData.currency,
+          location: formData.location,
+          type: formData.type,
+          status: formData.status,
+        })
+        finalPropertyId = propertyId
+      } else {
+        // Create new property
+        const { propertyId: newPropertyId } = await createProperty({
+          title: formData.title,
+          description: formData.description,
+          price: formData.price,
+          currency: formData.currency,
+          location: formData.location,
+          type: formData.type,
+          status: formData.status,
+          images: [], // Legacy field, will be replaced by multimedia
+        })
+        finalPropertyId = newPropertyId
+      }
+
+      // Step 3: Handle custom fields (addCustomField now handles replacement automatically)
+      for (const field of customFields) {
+        await addCustomField({
+          propertyId: finalPropertyId,
+          name: field.name,
+          value: field.value,
+          fieldType: field.fieldType,
+          unit: field.unit,
+          icon: field.icon,
+        })
+      }
+
+      // Step 4: Update existing amenities if they have been edited
+      for (const amenity of amenities) {
+        if (amenity.editedAmenity && !amenity.amenityId.startsWith('custom-')) {
+          await updateAmenity({
+            amenityId: amenity.amenityId as Id<"amenities">,
+            name: amenity.editedAmenity.name,
+            icon: amenity.editedAmenity.icon,
+            color: amenity.editedAmenity.color,
+          })
+        }
+      }
+
+      // Step 5: Handle amenities using the real amenity IDs
+      for (const amenity of amenities) {
+        const realAmenityId = amenityIdMap.get(amenity.amenityId)
+        if (realAmenityId) {
+          await addPropertyAmenity({
+            propertyId: finalPropertyId,
+            amenityId: realAmenityId,
+            isAvailable: amenity.isAvailable,
+            notes: amenity.notes,
+          })
+        }
+      }
+
+      // Step 6: Handle multimedia files
+      for (const [index, fileUpload] of files.entries()) {
+        await addMultimedia({
+          propertyId: finalPropertyId,
+          type: fileUpload.type,
+          filename: fileUpload.file.name,
+          url: fileUpload.preview, // In real app, this would be the uploaded file URL
+          fileSize: fileUpload.file.size,
+          mimeType: fileUpload.file.type,
+          order: index,
+          description: fileUpload.description,
+        })
+      }
+
+      // Navigate to the property detail page
+      onPropertyCreated(finalPropertyId)
+    } catch (error) {
+      console.error(`Error ${isEditMode ? 'updating' : 'creating'} property:`, error)
+      // In a real app, you'd show an error message to the user
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const isFormValid = () => {
+    return formData.title.trim() !== "" && 
+           formData.description.trim() !== "" && 
+           formData.location.trim() !== "" && 
+           formData.price > 0
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-4">
+        <Button variant="outline" onClick={onBack}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Properties
+        </Button>
+        <h1 className="text-2xl font-bold">
+          {isEditMode ? 'Edit Property' : 'Add New Property'}
+        </h1>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Property Details */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Property Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Title *</label>
+                  <Input
+                    value={formData.title}
+                    onChange={(e) => handleInputChange('title', e.target.value)}
+                    placeholder="Beautiful family home"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Location *</label>
+                  <Input
+                    value={formData.location}
+                    onChange={(e) => handleInputChange('location', e.target.value)}
+                    placeholder="123 Main St, City, State"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Type</label>
+                  <Select 
+                    value={formData.type} 
+                    onValueChange={(value: 'House' | 'Apartment' | 'Land' | 'Commercial') => handleInputChange('type', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="House">House</SelectItem>
+                      <SelectItem value="Apartment">Apartment</SelectItem>
+                      <SelectItem value="Land">Land</SelectItem>
+                      <SelectItem value="Commercial">Commercial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Status</label>
+                  <Select 
+                    value={formData.status} 
+                    onValueChange={(value: 'For Sale' | 'For Rent' | 'Sold') => handleInputChange('status', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="For Sale">For Sale</SelectItem>
+                      <SelectItem value="For Rent">For Rent</SelectItem>
+                      <SelectItem value="Sold">Sold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Price *</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      value={formData.price}
+                      onChange={(e) => handleInputChange('price', Number(e.target.value))}
+                      placeholder="0"
+                      required
+                      className="flex-1"
+                    />
+                    <Select 
+                      value={formData.currency} 
+                      onValueChange={(value: string) => handleInputChange('currency', value)}
+                    >
+                      <SelectTrigger className="w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CURRENCIES.map(currency => (
+                          <SelectItem key={currency.code} value={currency.code}>
+                            {currency.code}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1 block">Description *</label>
+                <Textarea
+                  value={formData.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  placeholder="Describe the property..."
+                  rows={4}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Custom Fields Section */}
+            <div className="border-t pt-6">
+              <CustomFieldsEditor
+                fields={customFields}
+                onFieldsChange={setCustomFields}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Photo Upload */}
+        <Card>
+          <CardContent className="p-6">
+            <PhotoUpload
+              files={files}
+              onFilesChange={setFiles}
+              maxFiles={10}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Amenities */}
+        <Card>
+          <CardContent className="p-6">
+            <AmenitiesEditor
+              amenities={amenities}
+              onAmenitiesChange={setAmenities}
+              isEditMode={isEditMode}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Submit Button */}
+        <div className="flex justify-end space-x-4">
+          <Button type="button" variant="outline" onClick={onBack}>
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={!isFormValid() || isSubmitting}
+            className="min-w-[120px]"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {isEditMode ? 'Updating...' : 'Creating...'}
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                {isEditMode ? 'Update Property' : 'Create Property'}
+              </>
+            )}
+          </Button>
+        </div>
+      </form>
+
+      {/* Help text */}
+      <p className="text-xs text-muted-foreground">
+        Fields marked with * are required. All information can be edited later.
+      </p>
+    </div>
+  )
+} 

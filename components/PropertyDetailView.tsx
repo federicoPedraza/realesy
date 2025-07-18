@@ -1,12 +1,15 @@
 import React from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
+import { useQuery } from "convex/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, ArrowLeft, ArrowRight, X, Flame, Waves, Car, Wifi, Tv, AirVent, Home, Calendar, Ruler, Users, Eye, EyeOff, Eye as EyeIcon, Heart, Share2, FileText, Calendar as CalendarIcon } from "lucide-react"
+import { MapPin, Plus, ArrowLeft, ArrowRight, X, Flame, Waves, Car, Wifi, Tv, AirVent, Home, Eye, EyeOff, Eye as EyeIcon, Heart, Share2, FileText, Calendar as CalendarIcon, Pencil, Star, Calendar, Ruler, Users, Clock, Coffee, Camera, Music, Gamepad2, Utensils, Bed, Bath, Zap, Sun, Moon, Lock, Key, Dumbbell, Shield, TreePine, Building } from "lucide-react"
 import { Property, PropertyNote } from "@/types/property"
+import { api } from "@/convex/_generated/api"
+import { Id } from "@/convex/_generated/dataModel"
 
 interface PropertyDetailViewProps {
   property: Property
@@ -27,8 +30,18 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
   const [isFullScreen, setIsFullScreen] = React.useState(false)
   const [showHiddenElements, setShowHiddenElements] = React.useState(false)
 
+  // Load real property data from database
+  const propertyId = property.id as Id<"properties">
+  const customFields = useQuery(api.properties.getPropertyCustomFields, { propertyId })
+  const propertyAmenities = useQuery(api.properties.getPropertyAmenities, { propertyId })
+  const multimedia = useQuery(api.properties.getPropertyMultimedia, { propertyId })
+
   const handleBack = () => {
     router.push("/properties")
+  }
+
+  const handleEdit = () => {
+    router.push(`/properties/add?id=${property.id}`)
   }
 
   const handleSaveNote = () => {
@@ -38,49 +51,60 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
     }
   }
 
+  const getCurrentImages = () => {
+    const images = multimedia?.filter(m => m.type === 'image') || []
+    return images.length > 0 ? images.map(img => img.url) : property.images
+  }
+
   const nextImage = () => {
-    setSelectedImageIndex((prev) => (prev + 1) % property.images.length)
+    const images = getCurrentImages()
+    setSelectedImageIndex((prev) => (prev + 1) % images.length)
   }
 
   const prevImage = () => {
-    setSelectedImageIndex((prev) => (prev - 1 + property.images.length) % property.images.length)
+    const images = getCurrentImages()
+    setSelectedImageIndex((prev) => (prev - 1 + images.length) % images.length)
   }
 
   const openFullScreen = () => setIsFullScreen(true)
   const closeFullScreen = () => setIsFullScreen(false)
 
-  // Mock amenities data - in real app this would come from property data
-  const allAmenities = [
-    { name: "Grill", icon: Flame, available: true, color: "text-orange-500" },
-    { name: "Pool", icon: Waves, available: true, color: "text-blue-500" },
-    { name: "Garage", icon: Car, available: false, color: "text-gray-500" },
-    { name: "WiFi", icon: Wifi, available: true, color: "text-purple-500" },
-    { name: "TV", icon: Tv, available: true, color: "text-red-500" },
-    { name: "AC", icon: AirVent, available: true, color: "text-cyan-500" },
-  ]
-
-  // Filter out unavailable amenities
-  const amenities = allAmenities.filter(amenity => amenity.available)
-
-  // Mock additional property data - in real app this would come from property data
-  const propertyDetails = {
-    age: "5 years",
-    height: "2.8m",
-    carCapacity: "0 cars", // Changed to 0 to test hiding
-    maxOccupancy: "6 people",
-    parkingSpaces: "0", // Changed to 0 to test hiding
-    floorLevel: "Ground floor",
+  // Icon mapping function
+  const getIconComponent = (iconName?: string) => {
+    const iconMap: { [key: string]: React.ComponentType<{ className?: string }> } = {
+      Flame, Waves, Car, Wifi, Tv, AirVent, Home, Star, MapPin, Plus, Heart, 
+      Shield, TreePine, Building, Calendar, Ruler, Users, Clock, Coffee, 
+      Camera, Music, Gamepad2, Utensils, Bed, Bath, Zap, Sun, Moon, Lock, 
+      Key, Dumbbell
+    }
+    return iconMap[iconName || 'Star'] || Star
   }
+
+  // Get available amenities from real data
+  const amenities = propertyAmenities?.filter(pa => pa.isAvailable).map(pa => {
+    const IconComponent = getIconComponent(pa.amenity.icon)
+    return {
+      name: pa.amenity.name,
+      icon: IconComponent,
+      available: pa.isAvailable,
+      color: pa.amenity.color || "text-gray-600",
+      notes: pa.notes
+    }
+  }) || []
 
   return (
     <div className="space-y-6">
-      {/* Back Button and Toggle */}
+      {/* Back Button and Actions */}
       <div className="flex items-center gap-4 mb-4">
         <Button variant="outline" onClick={handleBack}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Properties
         </Button>
-                <Button
+        <Button variant="outline" size="sm" onClick={handleEdit}>
+          <Pencil className="h-4 w-4 mr-2" />
+          Edit Property
+        </Button>
+        <Button
           variant="outline"
           size="sm"
           onClick={() => setShowHiddenElements(!showHiddenElements)}
@@ -100,14 +124,20 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
         <div className="space-y-4">
           <div className="relative">
             <Image
-              src={property.images[selectedImageIndex] || "/placeholder.svg"}
+              src={getCurrentImages()[selectedImageIndex] || "/placeholder.svg"}
               alt={`${property.title} - Image ${selectedImageIndex + 1}`}
               width={600}
               height={400}
               className="w-full h-96 object-cover rounded-lg cursor-pointer"
               onClick={openFullScreen}
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (target.src !== "/placeholder.svg") {
+                  target.src = "/placeholder.svg";
+                }
+              }}
             />
-            {property.images.length > 1 && (
+            {getCurrentImages().length > 1 && (
               <>
                 <Button
                   variant="secondary"
@@ -130,9 +160,9 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
           </div>
 
           {/* Thumbnail Preview */}
-          {property.images.length > 1 && (
+          {getCurrentImages().length > 1 && (
             <div className="flex gap-2 overflow-x-auto">
-              {property.images.map((image, index) => (
+              {getCurrentImages().map((image, index) => (
                 <Image
                   key={index}
                   src={image || "/placeholder.svg"}
@@ -143,6 +173,12 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
                     index === selectedImageIndex ? 'opacity-100' : 'opacity-50'
                   }`}
                   onClick={() => setSelectedImageIndex(index)}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    if (target.src !== "/placeholder.svg") {
+                      target.src = "/placeholder.svg";
+                    }
+                  }}
                 />
               ))}
             </div>
@@ -158,7 +194,18 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
               {property.location}
             </div>
             <div className="text-2xl font-bold text-primary mb-4">
-              ${property.price.toLocaleString()}
+              {(() => {
+                const currency = property.currency || 'USD'
+                const currencySymbol = currency === 'USD' ? '$' : 
+                                     currency === 'EUR' ? '€' : 
+                                     currency === 'GBP' ? '£' : 
+                                     currency === 'JPY' ? '¥' : 
+                                     currency === 'CAD' ? 'C$' : 
+                                     currency === 'AUD' ? 'A$' : 
+                                     currency === 'CHF' ? 'Fr' : 
+                                     currency === 'CNY' ? '¥' : '$'
+                return `${currencySymbol}${property.price.toLocaleString()} ${currency}`
+              })()}
               {property.status === "For Rent" && "/mo"}
             </div>
             <Badge variant={property.status === "For Sale" ? "default" : "secondary"} className="mb-4">
@@ -174,49 +221,29 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
                 <span>Type:</span>
                 <span className="font-medium">{property.type}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Ruler className="h-4 w-4 text-muted-foreground" />
-                <span>Area:</span>
-                <span className="font-medium">{property.area} sqft</span>
-              </div>
-              {property.bedrooms > 0 && (
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span>Bedrooms:</span>
-                  <span className="font-medium">{property.bedrooms}</span>
-                </div>
-              )}
-              {property.bathrooms > 0 && (
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span>Bathrooms:</span>
-                  <span className="font-medium">{property.bathrooms}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span>Age:</span>
-                <span className="font-medium">{propertyDetails.age}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Ruler className="h-4 w-4 text-muted-foreground" />
-                <span>Height:</span>
-                <span className="font-medium">{propertyDetails.height}</span>
-              </div>
-              {showHiddenElements || !propertyDetails.carCapacity.startsWith("0") ? (
-                <div className="flex items-center gap-2">
-                  <Car className="h-4 w-4 text-muted-foreground" />
-                  <span>Car Capacity:</span>
-                  <span className="font-medium">{propertyDetails.carCapacity}</span>
-                </div>
-              ) : null}
-              {showHiddenElements || !propertyDetails.maxOccupancy.startsWith("0") ? (
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span>Max Occupancy:</span>
-                  <span className="font-medium">{propertyDetails.maxOccupancy}</span>
-                </div>
-              ) : null}
+              
+              {/* Display custom fields as property details */}
+              {customFields?.map((field) => {
+                const IconComponent = getIconComponent(field.icon)
+                return (
+                  <div key={field._id} className="flex items-center gap-2">
+                    <IconComponent className="h-4 w-4 text-muted-foreground" />
+                    <span>{field.name}:</span>
+                    <span className="font-medium">
+                      {field.fieldType === 'boolean' 
+                        ? (field.value ? 'Yes' : 'No')
+                        : field.fieldType === 'currency'
+                        ? `$${field.value}`
+                        : field.fieldType === 'percentage'
+                        ? `${field.value}%`
+                        : field.fieldType === 'metric'
+                        ? `${field.value}${field.unit ? ` ${field.unit}` : ''}`
+                        : String(field.value)
+                      }
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
@@ -233,24 +260,25 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
         {/* Amenities integrated into description */}
         <div className="flex justify-center">
           <div className="bg-muted/50 rounded-lg p-6 max-w-4xl w-full">
-            <div className="flex justify-center">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                {amenities.map((amenity) => (
-                  <div key={amenity.name} className="flex items-center gap-2">
-                    <amenity.icon className={`h-5 w-5 ${amenity.color}`} />
-                    <span className="text-sm font-medium">{amenity.name}</span>
-                  </div>
-                ))}
-                {/* Show unavailable amenities only when toggle is on */}
-                {showHiddenElements && allAmenities
-                  .filter(amenity => !amenity.available)
-                  .map((amenity) => (
-                    <div key={amenity.name} className="flex items-center gap-2 opacity-50">
-                      <amenity.icon className={`h-5 w-5 ${amenity.color}`} />
-                      <span className="text-sm font-medium">{amenity.name}</span>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 justify-items-center">
+              {amenities.map((amenity) => (
+                <div key={amenity.name} className="flex items-center gap-2 justify-center">
+                  <amenity.icon className={`h-5 w-5 ${amenity.color}`} />
+                  <span className="text-sm font-medium">{amenity.name}</span>
+                </div>
+              ))}
+              {/* Show unavailable amenities only when toggle is on */}
+              {showHiddenElements && propertyAmenities
+                ?.filter(pa => !pa.isAvailable)
+                .map((pa) => {
+                  const IconComponent = getIconComponent(pa.amenity.icon)
+                  return (
+                    <div key={pa._id} className="flex items-center gap-2 justify-center opacity-50">
+                      <IconComponent className={`h-5 w-5 ${pa.amenity.color || "text-gray-600"}`} />
+                      <span className="text-sm font-medium">{pa.amenity.name}</span>
                     </div>
-                  ))}
-              </div>
+                  )
+                })}
             </div>
           </div>
         </div>
@@ -343,13 +371,19 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
               <X className="h-4 w-4" />
             </Button>
             <Image
-              src={property.images[selectedImageIndex] || "/placeholder.svg"}
+              src={getCurrentImages()[selectedImageIndex] || "/placeholder.svg"}
               alt={`${property.title} - Full Screen ${selectedImageIndex + 1}`}
               width={800}
               height={600}
               className="max-w-full max-h-full object-contain"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (target.src !== "/placeholder.svg") {
+                  target.src = "/placeholder.svg";
+                }
+              }}
             />
-            {property.images.length > 1 && (
+            {getCurrentImages().length > 1 && (
               <>
                 <Button
                   variant="secondary"

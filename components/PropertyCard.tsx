@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { MapPin, Bed, Bath, Square, Eye, Heart, Share2 } from "lucide-react"
+import { MapPin, Eye, Heart, Share2 } from "lucide-react"
 import { Property } from "@/types/property"
 
 interface PropertyCardProps {
@@ -53,25 +53,6 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
-          {property.bedrooms > 0 && (
-            <div className="flex items-center">
-              <Bed className="h-4 w-4 mr-1" />
-              {property.bedrooms} bed
-            </div>
-          )}
-          {property.bathrooms > 0 && (
-            <div className="flex items-center">
-              <Bath className="h-4 w-4 mr-1" />
-              {property.bathrooms} bath
-            </div>
-          )}
-          <div className="flex items-center">
-            <Square className="h-4 w-4 mr-1" />
-            {property.area} sqft
-          </div>
-        </div>
-
         <div className="flex items-center justify-between text-sm mb-4">
           <div className="flex items-center space-x-4">
             <div className="flex items-center">

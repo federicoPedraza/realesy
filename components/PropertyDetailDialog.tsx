@@ -72,22 +72,6 @@ export const PropertyDetailDialog: React.FC<PropertyDetailDialogProps> = ({
                   <span>Status:</span>
                   <Badge variant={property.status === "For Sale" ? "default" : "secondary"}>{property.status}</Badge>
                 </div>
-                <div className="flex justify-between">
-                  <span>Area:</span>
-                  <span>{property.area} sqft</span>
-                </div>
-                {property.bedrooms > 0 && (
-                  <div className="flex justify-between">
-                    <span>Bedrooms:</span>
-                    <span>{property.bedrooms}</span>
-                  </div>
-                )}
-                {property.bathrooms > 0 && (
-                  <div className="flex justify-between">
-                    <span>Bathrooms:</span>
-                    <span>{property.bathrooms}</span>
-                  </div>
-                )}
               </div>
             </div>
 
