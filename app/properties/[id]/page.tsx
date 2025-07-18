@@ -4,15 +4,12 @@ import { useParams } from "next/navigation"
 import { useQuery } from "convex/react"
 import { DashboardLayout } from "@/components/DashboardLayout"
 import { PropertyDetailView } from "@/components/PropertyDetailView"
-import { useDashboard } from "@/hooks/useDashboard"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
 
 export default function PropertyDetailPage() {
   const params = useParams()
   const propertyId = params.id as string
-
-  const { propertyNotes, handleAddNote, handleSaveNote } = useDashboard()
 
   // Fetch property from Convex
   const property = useQuery(api.properties.getProperty, { 
@@ -61,9 +58,6 @@ export default function PropertyDetailPage() {
     <DashboardLayout>
       <PropertyDetailView
         property={formattedProperty}
-        notes={propertyNotes}
-        onAddNote={handleAddNote}
-        onSaveNote={handleSaveNote}
       />
     </DashboardLayout>
   )

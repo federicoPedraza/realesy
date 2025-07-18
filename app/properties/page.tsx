@@ -5,7 +5,6 @@ import { useQuery } from "convex/react"
 import { PropertiesView } from "@/components/PropertiesView"
 import { DashboardLayout } from "@/components/DashboardLayout"
 import { api } from "@/convex/_generated/api"
-import { Property } from "@/types/property"
 
 export default function PropertiesPage() {
   const router = useRouter()
@@ -34,17 +33,11 @@ export default function PropertiesPage() {
     router.push("/properties/add")
   }
 
-  const handleEditProperty = (property: Property) => {
-    // For now, just navigate to the property detail page
-    router.push(`/properties/${property.id}`)
-  }
-
   return (
     <DashboardLayout>
       <PropertiesView
         properties={properties}
         onAddProperty={handleAddProperty}
-        onEditProperty={handleEditProperty}
       />
     </DashboardLayout>
   )

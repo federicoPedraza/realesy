@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { useMutation } from "convex/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,8 +10,10 @@ import { ArrowLeft, Save, Loader2 } from "lucide-react"
 import { PhotoUpload } from "@/components/PhotoUpload"
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor"
 import { AmenitiesEditor } from "@/components/AmenitiesEditor"
+import { useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
+import { uploadImage, uploadVideo, uploadDocument, getBucketForFileType } from "@/lib/supabase.lib"
 import { 
   PropertyFormData, 
   CustomFieldFormData, 
@@ -60,12 +61,15 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
   const [customFields, setCustomFields] = useState<CustomFieldFormData[]>([])
   const [amenities, setAmenities] = useState<PropertyAmenityFormData[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [removedMultimediaIds, setRemovedMultimediaIds] = useState<string[]>([])
+  const [updatedMultimediaDescriptions, setUpdatedMultimediaDescriptions] = useState<Record<string, string>>({})
 
   const createProperty = useMutation(api.properties.createProperty)
   const updateProperty = useMutation(api.properties.updateProperty)
   const addCustomField = useMutation(api.properties.addCustomField)
   const addPropertyAmenity = useMutation(api.properties.addPropertyAmenity)
   const addMultimedia = useMutation(api.properties.addMultimedia)
+  const deleteMultimedia = useMutation(api.properties.deleteMultimedia)
   const createAmenity = useMutation(api.properties.createAmenity)
   const updateAmenity = useMutation(api.properties.updateAmenity)
 
@@ -122,6 +126,17 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
 
   const handleInputChange = (field: keyof PropertyFormData, value: string | number | undefined) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleRemoveExistingMultimedia = (multimediaId: string) => {
+    setRemovedMultimediaIds(prev => [...prev, multimediaId])
+  }
+
+  const handleUpdateExistingDescription = (multimediaId: string, description: string) => {
+    setUpdatedMultimediaDescriptions(prev => ({
+      ...prev,
+      [multimediaId]: description
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -218,18 +233,81 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
         }
       }
 
-      // Step 6: Handle multimedia files
+      // Step 6: Delete removed multimedia and update descriptions
+      for (const multimediaId of removedMultimediaIds) {
+        try {
+          await deleteMultimedia({ multimediaId: multimediaId as Id<"multimedia"> })
+        } catch (deleteError) {
+          console.error(`Error deleting multimedia ${multimediaId}:`, deleteError)
+          // Continue with other operations even if deletion fails
+        }
+      }
+
+      // Step 6.5: Update descriptions for existing multimedia
+      for (const [multimediaId, newDescription] of Object.entries(updatedMultimediaDescriptions)) {
+        try {
+          // Find the original multimedia entry
+          const originalMultimedia = existingMultimedia.find(m => m._id === multimediaId)
+          if (originalMultimedia && newDescription !== originalMultimedia.description) {
+            // Delete the old entry
+            await deleteMultimedia({ multimediaId: multimediaId as Id<"multimedia"> })
+            // Recreate with updated description
+            await addMultimedia({
+              propertyId: finalPropertyId,
+              type: originalMultimedia.type,
+              filename: originalMultimedia.filename,
+              url: originalMultimedia.url,
+              fileSize: originalMultimedia.fileSize,
+              mimeType: originalMultimedia.mimeType,
+              order: originalMultimedia.order || 0,
+              description: newDescription,
+              priority: originalMultimedia.priority || 0,
+            })
+          }
+        } catch (updateError) {
+          console.error(`Error updating multimedia description ${multimediaId}:`, updateError)
+          // Continue with other operations even if update fails
+        }
+      }
+
+      // Step 7: Handle multimedia files - upload to Supabase via backend and store URLs in Convex
       for (const [index, fileUpload] of files.entries()) {
-        await addMultimedia({
-          propertyId: finalPropertyId,
-          type: fileUpload.type,
-          filename: fileUpload.file.name,
-          url: fileUpload.preview, // In real app, this would be the uploaded file URL
-          fileSize: fileUpload.file.size,
-          mimeType: fileUpload.file.type,
-          order: index,
-          description: fileUpload.description,
-        })
+        try {
+          // Determine the appropriate bucket based on file type
+          const bucket = getBucketForFileType(fileUpload.file.type)
+          
+          // Upload file to Supabase via backend HTTP endpoint
+          let uploadResult
+          switch (bucket) {
+            case 'images':
+              uploadResult = await uploadImage(fileUpload.file)
+              break
+            case 'videos':
+              uploadResult = await uploadVideo(fileUpload.file)
+              break
+            case 'documents':
+              uploadResult = await uploadDocument(fileUpload.file)
+              break
+            default:
+              uploadResult = await uploadImage(fileUpload.file)
+          }
+          
+          // Store the Supabase URL in Convex
+          await addMultimedia({
+            propertyId: finalPropertyId,
+            type: fileUpload.type,
+            filename: fileUpload.file.name,
+            url: uploadResult.url, // Supabase public URL from backend response
+            fileSize: fileUpload.file.size,
+            mimeType: fileUpload.file.type,
+            order: index,
+            description: fileUpload.description,
+            priority: index, // Use the index as priority (lower numbers = higher priority)
+          })
+        } catch (uploadError) {
+          console.error(`Error uploading file ${fileUpload.file.name}:`, uploadError)
+          // Continue with other files even if one fails
+        }
       }
 
       // Navigate to the property detail page
@@ -384,6 +462,18 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
               files={files}
               onFilesChange={setFiles}
               maxFiles={10}
+              existingMultimedia={existingMultimedia
+                .filter(m => !removedMultimediaIds.includes(m._id))
+                .map(m => ({
+                  ...m,
+                  description: updatedMultimediaDescriptions[m._id] !== undefined 
+                    ? updatedMultimediaDescriptions[m._id] 
+                    : m.description
+                }))
+              }
+              isEditMode={isEditMode}
+              onRemoveExisting={handleRemoveExistingMultimedia}
+              onUpdateExistingDescription={handleUpdateExistingDescription}
             />
           </CardContent>
         </Card>

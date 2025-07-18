@@ -31,7 +31,8 @@ export default defineSchema({
     url: v.string(), // For now, just storing URLs; later can be replaced with Convex file storage IDs
     order: v.optional(v.number()), // For ordering images in gallery
     description: v.optional(v.string()),
-  }).index("by_property", ["propertyId"]).index("by_property_and_type", ["propertyId", "type"]),
+    priority: v.optional(v.number()), // Priority number for loading order (lower numbers = higher priority)
+  }).index("by_property", ["propertyId"]).index("by_property_and_type", ["propertyId", "type"]).index("by_property_and_priority", ["propertyId", "priority"]),
 
   // Custom fields for properties
   propertyCustomFields: defineTable({

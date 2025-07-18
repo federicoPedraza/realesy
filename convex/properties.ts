@@ -60,6 +60,7 @@ export const addMultimedia = mutation({
     mimeType: v.optional(v.string()),
     order: v.optional(v.number()),
     description: v.optional(v.string()),
+    priority: v.optional(v.number()), // Priority number for loading order (lower numbers = higher priority)
   },
   returns: v.object({ multimediaId: v.id("multimedia") }),
   handler: async (ctx, args) => {
@@ -73,6 +74,18 @@ export const deleteMultimedia = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.delete(args.multimediaId);
+    return null;
+  },
+});
+
+export const updateMultimediaPriority = mutation({
+  args: {
+    multimediaId: v.id("multimedia"),
+    priority: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.multimediaId, { priority: args.priority });
     return null;
   },
 });
@@ -288,6 +301,27 @@ export const initializeDefaultAmenities = mutation({
   },
 });
 
+// Migration function to add priority to existing multimedia records
+export const migrateMultimediaPriority = mutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    // Get all multimedia records that don't have a priority field
+    const multimediaRecords = await ctx.db.query("multimedia").collect();
+    
+    for (const record of multimediaRecords) {
+      // Check if the record already has a priority field
+      if (record.priority === undefined) {
+        // Use the order field if available, otherwise use creation time as priority
+        const priority = record.order !== undefined ? record.order : record._creationTime;
+        await ctx.db.patch(record._id, { priority });
+      }
+    }
+
+    return null;
+  },
+});
+
 // Queries
 export const getProperty = query({
   args: { propertyId: v.id("properties") },
@@ -348,12 +382,58 @@ export const getPropertyMultimedia = query({
     url: v.string(),
     order: v.optional(v.number()),
     description: v.optional(v.string()),
+    priority: v.optional(v.number()),
   })),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("multimedia")
-      .withIndex("by_property", (q) => q.eq("propertyId", args.propertyId))
+      .withIndex("by_property_and_priority", (q) => q.eq("propertyId", args.propertyId))
+      .order("asc") // Order by priority (ascending - lower numbers first)
       .collect();
+  },
+});
+
+export const getPropertyMultimediaByType = query({
+  args: { 
+    propertyId: v.id("properties"),
+    type: v.union(v.literal("image"), v.literal("video"), v.literal("document")),
+  },
+  returns: v.array(v.object({
+    _id: v.id("multimedia"),
+    _creationTime: v.number(),
+    propertyId: v.id("properties"),
+    type: v.union(v.literal("image"), v.literal("video"), v.literal("document")),
+    filename: v.string(),
+    fileSize: v.optional(v.number()),
+    mimeType: v.optional(v.string()),
+    url: v.string(),
+    order: v.optional(v.number()),
+    description: v.optional(v.string()),
+    priority: v.optional(v.number()),
+  })),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("multimedia")
+      .withIndex("by_property_and_type", (q) => 
+        q.eq("propertyId", args.propertyId).eq("type", args.type)
+      )
+      .order("asc") // Order by priority (ascending - lower numbers first)
+      .collect();
+  },
+});
+
+// Get the next available priority number for a property
+export const getNextPriority = query({
+  args: { propertyId: v.id("properties") },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const multimediaRecords = await ctx.db
+      .query("multimedia")
+      .withIndex("by_property_and_priority", (q) => q.eq("propertyId", args.propertyId))
+      .order("desc") // Get the highest priority first
+      .first();
+    
+    return multimediaRecords && multimediaRecords.priority !== undefined ? multimediaRecords.priority + 1 : 0;
   },
 });
 

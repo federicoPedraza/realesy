@@ -29,6 +29,7 @@ export interface MultimediaFile {
   url: string
   order?: number
   description?: string
+  priority?: number
   _creationTime: number
 }
 
@@ -251,4 +252,5 @@ export interface ConvexMultimedia {
   url: string
   order?: number
   description?: string
+  priority?: number
 }

@@ -9,13 +9,11 @@ import { PropertyCard } from "./PropertyCard"
 interface PropertiesViewProps {
   properties: Property[]
   onAddProperty?: () => void
-  onEditProperty?: (property: Property) => void
 }
 
 export const PropertiesView: React.FC<PropertiesViewProps> = ({
   properties,
   onAddProperty,
-  onEditProperty,
 }) => {
   const [searchQuery, setSearchQuery] = React.useState("")
   const [propertyType, setPropertyType] = React.useState("all")
@@ -79,7 +77,6 @@ export const PropertiesView: React.FC<PropertiesViewProps> = ({
           <PropertyCard
             key={property.id}
             property={property}
-            onEdit={onEditProperty}
           />
         ))}
       </div>
