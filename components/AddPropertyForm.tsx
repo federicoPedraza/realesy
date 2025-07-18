@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, Loader2 } from "lucide-react"
+import { ArrowLeft, Save, Loader2, Bold, Italic, Underline } from "lucide-react"
 import { PhotoUpload } from "@/components/PhotoUpload"
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor"
 import { AmenitiesEditor } from "@/components/AmenitiesEditor"
@@ -25,6 +25,182 @@ import {
   ConvexMultimedia,
   CURRENCIES
 } from "@/types/property"
+
+// Rich Text Renderer Component
+const RichTextRenderer: React.FC<{ content: string }> = ({ content }) => {
+  const formatText = (text: string) => {
+    // Convert markdown-style formatting to HTML
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+      .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic
+      .replace(/__(.*?)__/g, '<u>$1</u>') // Underline
+      .replace(/\n/g, '<br />') // Line breaks
+  }
+
+  return (
+    <div 
+      className="prose prose-sm max-w-none"
+      dangerouslySetInnerHTML={{ __html: formatText(content) }}
+    />
+  )
+}
+
+// Rich Text Editor Component
+const RichTextEditor: React.FC<{
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  rows?: number
+}> = ({ value, onChange, placeholder, rows = 4 }) => {
+  const [isBold, setIsBold] = useState(false)
+  const [isItalic, setIsItalic] = useState(false)
+  const [isUnderline, setIsUnderline] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+
+  const applyFormat = (format: 'bold' | 'italic' | 'underline') => {
+    const textarea = document.getElementById('rich-textarea') as HTMLTextAreaElement
+    if (!textarea) return
+
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const selectedText = value.substring(start, end)
+
+    if (selectedText) {
+      let formattedText = selectedText
+      switch (format) {
+        case 'bold':
+          formattedText = `**${selectedText}**`
+          break
+        case 'italic':
+          formattedText = `*${selectedText}*`
+          break
+        case 'underline':
+          formattedText = `__${selectedText}__`
+          break
+      }
+
+      const newValue = value.substring(0, start) + formattedText + value.substring(end)
+      onChange(newValue)
+
+      // Set cursor position after the formatted text
+      setTimeout(() => {
+        textarea.focus()
+        textarea.setSelectionRange(start + formattedText.length, start + formattedText.length)
+      }, 0)
+    } else {
+      // If no text is selected, insert formatting markers and place cursor between them
+      let markers = ''
+      switch (format) {
+        case 'bold':
+          markers = '****'
+          break
+        case 'italic':
+          markers = '**'
+          break
+        case 'underline':
+          markers = '____'
+          break
+      }
+
+      const newValue = value.substring(0, start) + markers + value.substring(end)
+      onChange(newValue)
+
+      // Set cursor position between the markers
+      setTimeout(() => {
+        textarea.focus()
+        const markerLength = markers.length / 2
+        textarea.setSelectionRange(start + markerLength, start + markerLength)
+      }, 0)
+    }
+  }
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onChange(e.target.value)
+    
+    // Update button states based on cursor position
+    const textarea = e.target
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    
+    if (start === end) {
+      // No selection, check if cursor is inside formatting
+      const beforeCursor = value.substring(0, start)
+      const afterCursor = value.substring(end)
+      
+      setIsBold(beforeCursor.endsWith('**') && afterCursor.startsWith('**'))
+      setIsItalic(beforeCursor.endsWith('*') && afterCursor.startsWith('*') && !beforeCursor.endsWith('**'))
+      setIsUnderline(beforeCursor.endsWith('__') && afterCursor.startsWith('__'))
+    } else {
+      // Text is selected, check if it's already formatted
+      const selectedText = value.substring(start, end)
+      setIsBold(selectedText.startsWith('**') && selectedText.endsWith('**'))
+      setIsItalic(selectedText.startsWith('*') && selectedText.endsWith('*') && !selectedText.startsWith('**'))
+      setIsUnderline(selectedText.startsWith('__') && selectedText.endsWith('__'))
+    }
+  }
+
+  return (
+    <div className="space-y-0">
+      {/* Formatting Toolbar */}
+      <div className="flex p-2 border rounded-t-lg bg-muted/50">
+        <Button
+          type="button"
+          variant={isBold ? "default" : "ghost"}
+          size="sm"
+          onClick={() => applyFormat('bold')}
+          className="h-8 w-8 p-0"
+        >
+          <Bold className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant={isItalic ? "default" : "ghost"}
+          size="sm"
+          onClick={() => applyFormat('italic')}
+          className="h-8 w-8 p-0"
+        >
+          <Italic className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant={isUnderline ? "default" : "ghost"}
+          size="sm"
+          onClick={() => applyFormat('underline')}
+          className="h-8 w-8 p-0"
+        >
+          <Underline className="h-4 w-4" />
+        </Button>
+        <div className="flex-1" />
+        <Button
+          type="button"
+          variant={showPreview ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setShowPreview(!showPreview)}
+          className="h-8 px-3 text-xs"
+        >
+          {showPreview ? "Edit" : "Preview"}
+        </Button>
+      </div>
+
+      {/* Textarea or Preview */}
+      {showPreview ? (
+        <div className="border rounded-b-lg border-t-0 p-3 min-h-[120px] bg-background">
+          <RichTextRenderer content={value || placeholder || ""} />
+        </div>
+      ) : (
+        <Textarea
+          id="rich-textarea"
+          value={value}
+          onChange={handleTextareaChange}
+          onSelect={handleTextareaChange}
+          placeholder={placeholder}
+          rows={rows}
+          className="rounded-t-none border-t-0 focus:border-t focus:border-t-input"
+        />
+      )}
+    </div>
+  )
+}
 
 interface AddPropertyFormProps {
   onBack: () => void
@@ -62,15 +238,15 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
   const [amenities, setAmenities] = useState<PropertyAmenityFormData[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [removedMultimediaIds, setRemovedMultimediaIds] = useState<string[]>([])
-  const [updatedMultimediaDescriptions, setUpdatedMultimediaDescriptions] = useState<Record<string, string>>({})
   const [reorderedMultimediaPriorities, setReorderedMultimediaPriorities] = useState<{ multimediaId: string; priority: number }[]>([])
 
   const createProperty = useMutation(api.properties.createProperty)
   const updateProperty = useMutation(api.properties.updateProperty)
   const addCustomField = useMutation(api.properties.addCustomField)
+  const deleteCustomField = useMutation(api.properties.deleteCustomField)
   const addPropertyAmenity = useMutation(api.properties.addPropertyAmenity)
+  const deletePropertyAmenity = useMutation(api.properties.deletePropertyAmenity)
   const addMultimedia = useMutation(api.properties.addMultimedia)
-  const deleteMultimedia = useMutation(api.properties.deleteMultimedia)
   const reorderMultimediaPriorities = useMutation(api.properties.reorderMultimediaPriorities)
   const createAmenity = useMutation(api.properties.createAmenity)
   const updateAmenity = useMutation(api.properties.updateAmenity)
@@ -134,13 +310,6 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
     setRemovedMultimediaIds(prev => [...prev, multimediaId])
   }
 
-  const handleUpdateExistingDescription = (multimediaId: string, description: string) => {
-    setUpdatedMultimediaDescriptions(prev => ({
-      ...prev,
-      [multimediaId]: description
-    }))
-  }
-
   const handleReorderPriorities = (multimediaOrder: { multimediaId: string; priority: number }[]) => {
     setReorderedMultimediaPriorities(multimediaOrder)
   }
@@ -202,7 +371,19 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
         finalPropertyId = newPropertyId
       }
 
-      // Step 3: Handle custom fields (addCustomField now handles replacement automatically)
+      // Step 3: Handle custom fields - remove deleted fields and add/update existing ones
+      if (isEditMode && existingCustomFields) {
+        // Find fields to delete (existing fields not in current customFields)
+        const currentFieldNames = new Set(customFields.map(f => f.name))
+        const fieldsToDelete = existingCustomFields.filter(field => !currentFieldNames.has(field.name))
+        
+        // Delete removed fields
+        for (const field of fieldsToDelete) {
+          await deleteCustomField({ fieldId: field._id as Id<"propertyCustomFields"> })
+        }
+      }
+      
+      // Add/update current custom fields
       for (const field of customFields) {
         await addCustomField({
           propertyId: finalPropertyId,
@@ -226,7 +407,19 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
         }
       }
 
-      // Step 5: Handle amenities using the real amenity IDs
+      // Step 5: Handle amenities - remove deleted amenities and add/update existing ones
+      if (isEditMode && existingAmenities) {
+        // Find amenities to delete (existing amenities not in current amenities)
+        const currentAmenityIds = new Set(amenities.map(a => a.amenityId))
+        const amenitiesToDelete = existingAmenities.filter(amenity => !currentAmenityIds.has(amenity.amenityId))
+        
+        // Delete removed amenities
+        for (const amenity of amenitiesToDelete) {
+          await deletePropertyAmenity({ propertyAmenityId: amenity._id as Id<"propertyAmenities"> })
+        }
+      }
+      
+      // Add/update current amenities using the real amenity IDs
       for (const amenity of amenities) {
         const realAmenityId = amenityIdMap.get(amenity.amenityId)
         if (realAmenityId) {
@@ -239,44 +432,7 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
         }
       }
 
-      // Step 6: Delete removed multimedia and update descriptions
-      for (const multimediaId of removedMultimediaIds) {
-        try {
-          await deleteMultimedia({ multimediaId: multimediaId as Id<"multimedia"> })
-        } catch (deleteError) {
-          console.error(`Error deleting multimedia ${multimediaId}:`, deleteError)
-          // Continue with other operations even if deletion fails
-        }
-      }
-
-      // Step 6.5: Update descriptions for existing multimedia
-      for (const [multimediaId, newDescription] of Object.entries(updatedMultimediaDescriptions)) {
-        try {
-          // Find the original multimedia entry
-          const originalMultimedia = existingMultimedia.find(m => m._id === multimediaId)
-          if (originalMultimedia && newDescription !== originalMultimedia.description) {
-            // Delete the old entry
-            await deleteMultimedia({ multimediaId: multimediaId as Id<"multimedia"> })
-            // Recreate with updated description
-            await addMultimedia({
-              propertyId: finalPropertyId,
-              type: originalMultimedia.type,
-              filename: originalMultimedia.filename,
-              url: originalMultimedia.url,
-              fileSize: originalMultimedia.fileSize,
-              mimeType: originalMultimedia.mimeType,
-              order: originalMultimedia.order || 0,
-              description: newDescription,
-              priority: originalMultimedia.priority || 0,
-            })
-          }
-        } catch (updateError) {
-          console.error(`Error updating multimedia description ${multimediaId}:`, updateError)
-          // Continue with other operations even if update fails
-        }
-      }
-
-      // Step 6.6: Update multimedia priorities if reordered
+      // Step 6: Update multimedia priorities if reordered
       if (reorderedMultimediaPriorities.length > 0) {
         try {
           await reorderMultimediaPriorities({
@@ -463,12 +619,10 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
 
               <div>
                 <label className="text-sm font-medium mb-1 block">Description *</label>
-                <Textarea
+                <RichTextEditor
                   value={formData.description}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  onChange={(value) => handleInputChange('description', value)}
                   placeholder="Describe the property..."
-                  rows={4}
-                  required
                 />
               </div>
             </div>
@@ -494,14 +648,11 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
                 .filter(m => !removedMultimediaIds.includes(m._id))
                 .map(m => ({
                   ...m,
-                  description: updatedMultimediaDescriptions[m._id] !== undefined 
-                    ? updatedMultimediaDescriptions[m._id] 
-                    : m.description
+                  description: m.description
                 }))
               }
               isEditMode={isEditMode}
               onRemoveExisting={handleRemoveExistingMultimedia}
-              onUpdateExistingDescription={handleUpdateExistingDescription}
               onReorderPriorities={handleReorderPriorities}
             />
           </CardContent>

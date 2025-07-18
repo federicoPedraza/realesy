@@ -105,6 +105,11 @@ export const CustomFieldsEditor: React.FC<CustomFieldsEditorProps> = ({
 
   const addField = () => {
     if (!newField.name || newField.fieldType === undefined) return
+    
+    // Check if we've reached the maximum number of custom fields (22)
+    if (fields.length >= 22) {
+      return
+    }
 
     const field: CustomFieldFormData = {
       name: newField.name,
@@ -292,7 +297,12 @@ export const CustomFieldsEditor: React.FC<CustomFieldsEditorProps> = ({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-base font-medium">Additional Details</h3>
-        <p className="text-sm text-muted-foreground">Click fields to edit or remove them</p>
+        <div className="flex items-center gap-4">
+          <p className="text-sm text-muted-foreground">Click fields to edit or remove them</p>
+          {fields.length >= 11 && (
+            <p className="text-sm text-muted-foreground">{fields.length}/22 fields</p>
+          )}
+        </div>
       </div>
 
       {/* Fields Grid */}
@@ -552,7 +562,14 @@ export const CustomFieldsEditor: React.FC<CustomFieldsEditorProps> = ({
                </div>
              </CardContent>
            </Card>
-                 ) : (
+                 ) : fields.length >= 22 ? (
+           <Card className="border-2 border-dashed border-gray-200 bg-gray-50">
+             <CardContent className="p-3 text-center">
+               <Plus className="h-6 w-6 mx-auto mb-2 text-gray-300" />
+               <p className="text-sm text-gray-400">Maximum 22 fields reached</p>
+             </CardContent>
+           </Card>
+         ) : (
            <Card 
              className="border-2 border-dashed border-gray-300 cursor-pointer hover:border-gray-400"
              onClick={() => setShowAddForm(true)}

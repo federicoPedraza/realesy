@@ -34,7 +34,6 @@ interface PhotoUploadProps {
   existingMultimedia?: ConvexMultimedia[]
   isEditMode?: boolean
   onRemoveExisting?: (multimediaId: string) => void
-  onUpdateExistingDescription?: (multimediaId: string, description: string) => void
   onReorderExisting?: (multimedia: ConvexMultimedia[]) => void
   onReorderPriorities?: (multimediaOrder: { multimediaId: string; priority: number }[]) => void
 }
@@ -42,16 +41,10 @@ interface PhotoUploadProps {
 // Sortable item component for existing multimedia
 const SortableExistingItem = ({ 
   media, 
-  onRemove, 
-  onUpdateDescription, 
-  isExpanded, 
-  onToggleExpanded 
+  onRemove
 }: {
   media: ConvexMultimedia
   onRemove: (id: string) => void
-  onUpdateDescription: (id: string, description: string) => void
-  isExpanded: boolean
-  onToggleExpanded: () => void
 }) => {
   const {
     attributes,
@@ -84,12 +77,6 @@ const SortableExistingItem = ({
       ref={setNodeRef}
       style={style}
       className="relative group py-2 cursor-pointer hover:shadow-md transition-shadow"
-      onClick={() => {
-        // Don't trigger click if we're dragging
-        if (!isDragging) {
-          onToggleExpanded()
-        }
-      }}
     >
       <CardContent className="px-2 py-0">
         <div className="min-h-52 relative bg-muted rounded-lg overflow-hidden">
@@ -116,7 +103,7 @@ const SortableExistingItem = ({
           {/* File type badge */}
           <Badge 
             variant="secondary" 
-            className="absolute bottom-1 left-1 text-xs"
+            className="absolute bottom-1 left-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
           >
             {media.type.charAt(0).toUpperCase() + media.type.slice(1)}
           </Badge>
@@ -126,6 +113,7 @@ const SortableExistingItem = ({
             {...attributes}
             {...listeners}
             className="absolute top-2 left-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-background/80 rounded cursor-grab active:cursor-grabbing flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
           >
             <GripVertical className="h-3 w-3 text-muted-foreground" />
           </div>
@@ -144,29 +132,6 @@ const SortableExistingItem = ({
         >
           <X className="h-3 w-3" />
         </Button>
-
-        {/* Collapsible Details Section */}
-        {isExpanded && (
-          <div className="mt-2 space-y-2">
-            {/* Description input for existing media */}
-            <div>
-              <input
-                type="text"
-                placeholder="Add description..."
-                value={media.description || ""}
-                onChange={(e) => onUpdateDescription(media._id, e.target.value)}
-                className="w-full text-xs p-1 border rounded text-center bg-background"
-              />
-            </div>
-
-            {/* File size */}
-            {media.fileSize && (
-              <p className="text-xs text-muted-foreground text-center">
-                {(media.fileSize / 1024 / 1024).toFixed(1)} MB
-              </p>
-            )}
-          </div>
-        )}
       </CardContent>
     </Card>
   )
@@ -176,17 +141,11 @@ const SortableExistingItem = ({
 const SortableNewItem = ({ 
   fileUpload, 
   index, 
-  onRemove, 
-  onUpdateDescription, 
-  isExpanded, 
-  onToggleExpanded 
+  onRemove
 }: {
   fileUpload: FileUpload
   index: number
   onRemove: (index: number) => void
-  onUpdateDescription: (index: number, description: string) => void
-  isExpanded: boolean
-  onToggleExpanded: () => void
 }) => {
   const {
     attributes,
@@ -219,7 +178,6 @@ const SortableNewItem = ({
       ref={setNodeRef}
       style={style}
       className="relative group py-2 px-4 cursor-pointer hover:shadow-md transition-shadow"
-      onClick={onToggleExpanded}
     >
       <CardContent className="px-2 py-0">
         <div className="h-52 relative bg-muted rounded-lg overflow-hidden">
@@ -242,7 +200,7 @@ const SortableNewItem = ({
           {/* File type badge */}
           <Badge 
             variant="secondary" 
-            className="absolute bottom-1 left-1 text-xs"
+            className="absolute bottom-1 left-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
           >
             {fileUpload.type.charAt(0).toUpperCase() + fileUpload.type.slice(1)}
           </Badge>
@@ -252,6 +210,7 @@ const SortableNewItem = ({
             {...attributes}
             {...listeners}
             className="absolute top-2 left-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-background/80 rounded cursor-grab active:cursor-grabbing flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
           >
             <GripVertical className="h-3 w-3 text-muted-foreground" />
           </div>
@@ -270,27 +229,6 @@ const SortableNewItem = ({
         >
           <X className="h-3 w-3" />
         </Button>
-
-        {/* Collapsible Details Section */}
-        {isExpanded && (
-          <div className="mt-2 space-y-2">
-            {/* Description input */}
-            <div>
-              <input
-                type="text"
-                placeholder="Add description..."
-                value={fileUpload.description}
-                onChange={(e) => onUpdateDescription(index, e.target.value)}
-                className="w-full text-xs p-1 border rounded text-center bg-background"
-              />
-            </div>
-
-            {/* File size */}
-            <p className="text-xs text-muted-foreground text-center">
-              {(fileUpload.file.size / 1024 / 1024).toFixed(1)} MB
-            </p>
-          </div>
-        )}
       </CardContent>
     </Card>
   )
@@ -304,12 +242,10 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
   existingMultimedia = [],
   isEditMode = false,
   onRemoveExisting,
-  onUpdateExistingDescription,
   onReorderExisting,
   onReorderPriorities
 }) => {
   const [dragActive, setDragActive] = useState(false)
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [orderedExistingMultimedia, setOrderedExistingMultimedia] = useState<ConvexMultimedia[]>(
     existingMultimedia.sort((a, b) => (a.priority || 0) - (b.priority || 0))
   )
@@ -366,25 +302,6 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
   const removeFile = (index: number) => {
     const newFiles = files.filter((_, i) => i !== index)
     onFilesChange(newFiles)
-  }
-
-  const updateDescription = (index: number, description: string) => {
-    const newFiles = files.map((file, i) => 
-      i === index ? { ...file, description } : file
-    )
-    onFilesChange(newFiles)
-  }
-
-  const toggleExpanded = (itemId: string) => {
-    setExpandedItems(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId)
-      } else {
-        newSet.add(itemId)
-      }
-      return newSet
-    })
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -506,9 +423,6 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
                   key={`existing-${media._id}`}
                   media={media}
                   onRemove={onRemoveExisting || (() => {})}
-                  onUpdateDescription={onUpdateExistingDescription || (() => {})}
-                  isExpanded={expandedItems.has(`existing-${media._id}`)}
-                  onToggleExpanded={() => toggleExpanded(`existing-${media._id}`)}
                 />
               ))}
 
@@ -519,9 +433,6 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
                   fileUpload={fileUpload}
                   index={index}
                   onRemove={removeFile}
-                  onUpdateDescription={updateDescription}
-                  isExpanded={expandedItems.has(`new-${index}`)}
-                  onToggleExpanded={() => toggleExpanded(`new-${index}`)}
                 />
               ))}
             </div>

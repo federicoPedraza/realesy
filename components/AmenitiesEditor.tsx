@@ -68,6 +68,7 @@ export const AmenitiesEditor: React.FC<AmenitiesEditorProps> = ({
   const [showColorSelector, setShowColorSelector] = useState(false)
   const [initialized, setInitialized] = useState(false)
   const [editingExistingAmenity, setEditingExistingAmenity] = useState<string | null>(null)
+  const [limitHitAmenityIds, setLimitHitAmenityIds] = useState<Set<string>>(new Set())
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Load amenities from database
@@ -119,13 +120,44 @@ export const AmenitiesEditor: React.FC<AmenitiesEditorProps> = ({
     
     if (existingIndex >= 0) {
       // Toggle isAvailable state
+      const currentAmenity = amenities[existingIndex]
+      const newIsAvailable = !currentAmenity.isAvailable
+      
+      // Check if we're trying to enable an amenity and we've reached the active limit
+      if (newIsAvailable) {
+        const activeCount = amenities.filter(a => a.isAvailable).length
+        if (activeCount >= 18) {
+          // Trigger pulsing animation for this specific amenity
+          setLimitHitAmenityIds(prev => new Set([...prev, amenityId]))
+          setTimeout(() => {
+            setLimitHitAmenityIds(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(amenityId)
+              return newSet
+            })
+          }, 600) // Clear this specific amenity after animation
+          return // Don't allow enabling more than 18 active amenities
+        }
+      }
+      
       const newAmenities = amenities.map((amenity, index) =>
         index === existingIndex 
-          ? { ...amenity, isAvailable: !amenity.isAvailable }
+          ? { ...amenity, isAvailable: newIsAvailable }
           : amenity
       )
       onAmenitiesChange(newAmenities)
     } else {
+      // Check if we've reached the total amenities limit (40)
+      if (amenities.length >= 40) {
+        return // Don't allow adding more than 40 total amenities
+      }
+      
+      // Check if we're trying to add as active and we've reached the active limit
+      const activeCount = amenities.filter(a => a.isAvailable).length
+      if (activeCount >= 18) {
+        return // Don't allow adding as active if we've reached the limit
+      }
+      
       // Add if not in list
       const newAmenity: PropertyAmenityFormData = {
         amenityId,
@@ -197,6 +229,11 @@ export const AmenitiesEditor: React.FC<AmenitiesEditorProps> = ({
         }))
       }
     } else {
+      // Check if we've reached the total amenities limit (40)
+      if (amenities.length >= 40) {
+        return // Don't allow adding more than 40 total amenities
+      }
+      
       // Create new custom amenity
       setCustomAmenities(prev => ({
         ...prev,
@@ -208,10 +245,14 @@ export const AmenitiesEditor: React.FC<AmenitiesEditorProps> = ({
         }
       }))
       
-      // Add to amenities list as enabled with custom amenity details
+      // Check if we can add as active or need to add as inactive
+      const activeCount = amenities.filter(a => a.isAvailable).length
+      const canAddAsActive = activeCount < 18
+      
+      // Add to amenities list with custom amenity details
       const newPropertyAmenity: PropertyAmenityFormData = {
         amenityId: editingAmenity,
-        isAvailable: true,
+        isAvailable: canAddAsActive, // Only set as active if under the limit
         notes: "",
         customAmenity: {
           name: editingName,
@@ -341,12 +382,38 @@ export const AmenitiesEditor: React.FC<AmenitiesEditorProps> = ({
 
   return (
     <div className="space-y-6">
+      <style jsx>{`
+        @keyframes limitHit {
+          0% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.7;
+            transform: scale(1.05);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        .animate-limit-hit {
+          animation: limitHit 0.6s ease-in-out;
+        }
+      `}</style>
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Amenities</h3>
-        <p className="text-sm text-muted-foreground">
-            Click amenities to enable/disable them
-            {isEditMode && "  •  Click edit to customize name, icon & color"}
-        </p>
+        <div className="flex items-center gap-4">
+          <p className="text-sm text-muted-foreground">
+              Click amenities to enable/disable them
+              {isEditMode && "  •  Click edit to customize name, icon & color"}
+          </p>
+          {(amenities.length >= 11 || amenities.filter(a => a.isAvailable).length >= 11) && (
+            <p className={`text-sm ${limitHitAmenityIds.size > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+              {amenities.filter(a => a.isAvailable).length}/18 active • {amenities.length}/40 total
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Current Amenities Grid */}
@@ -593,6 +660,10 @@ export const AmenitiesEditor: React.FC<AmenitiesEditorProps> = ({
                 isEnabled 
                   ? 'border-gray-800 bg-gray-50 shadow-md' 
                   : 'border-gray-200 hover:border-gray-300'
+              } ${
+                limitHitAmenityIds.has(amenity.amenityId)
+                  ? 'animate-limit-hit border-red-500 hover:border-red-500 bg-red-50' 
+                  : ''
               }`}
               onClick={() => toggleAmenity(amenity.amenityId)}
             >
@@ -628,8 +699,16 @@ export const AmenitiesEditor: React.FC<AmenitiesEditorProps> = ({
               </div>
 
               <CardContent className="p-3 text-center">
-                <Icon className={`h-6 w-6 mx-auto mb-2 ${isEnabled ? amenityInfo.color : 'text-gray-400'}`} />
-                <p className={`text-sm font-medium ${isEnabled ? 'text-foreground' : 'text-gray-500'}`}>
+                <Icon className={`h-6 w-6 mx-auto mb-2 ${
+                  limitHitAmenityIds.has(amenity.amenityId)
+                    ? 'text-red-500' 
+                    : isEnabled ? amenityInfo.color : 'text-gray-400'
+                }`} />
+                <p className={`text-sm font-medium ${
+                  limitHitAmenityIds.has(amenity.amenityId)
+                    ? 'text-red-500' 
+                    : isEnabled ? 'text-foreground' : 'text-gray-500'
+                }`}>
                   {amenityInfo.name}
                 </p>
               </CardContent>
@@ -745,6 +824,13 @@ export const AmenitiesEditor: React.FC<AmenitiesEditorProps> = ({
                   Cancel
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        ) : amenities.length >= 40 ? (
+          <Card className="border-2 border-dashed border-gray-200 bg-gray-50">
+            <CardContent className="p-3 text-center">
+              <Plus className="h-6 w-6 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm text-gray-400">Maximum 40 amenities reached</p>
             </CardContent>
           </Card>
         ) : (

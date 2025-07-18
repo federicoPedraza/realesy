@@ -4,10 +4,30 @@ import { useRouter } from "next/navigation"
 import { useQuery } from "convex/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { MapPin, Plus, ArrowLeft, ArrowRight, X, Flame, Waves, Car, Wifi, Tv, AirVent, Home, Pencil, Star, Calendar, Ruler, Users, Clock, Coffee, Camera, Music, Gamepad2, Utensils, Bed, Bath, Zap, Sun, Moon, Lock, Key, Dumbbell, Shield, TreePine, Building } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { MapPin, Plus, ArrowLeft, ArrowRight, X, Flame, Waves, Car, Wifi, Tv, AirVent, Home, Pencil, Star, Calendar, Ruler, Users, Clock, Coffee, Camera, Music, Gamepad2, Utensils, Bed, Bath, Zap, Sun, Moon, Lock, Key, Dumbbell, Shield, TreePine, Building, ChevronUp } from "lucide-react"
 import { Property } from "@/types/property"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
+
+// Rich Text Renderer Component
+const RichTextRenderer: React.FC<{ content: string }> = ({ content }) => {
+  const formatText = (text: string) => {
+    // Convert markdown-style formatting to HTML
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+      .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic
+      .replace(/__(.*?)__/g, '<u>$1</u>') // Underline
+      .replace(/\n/g, '<br />') // Line breaks
+  }
+
+  return (
+    <div 
+      className="prose prose-sm max-w-none"
+      dangerouslySetInnerHTML={{ __html: formatText(content) }}
+    />
+  )
+}
 
 interface PropertyDetailViewProps {
   property: Property
@@ -19,6 +39,7 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
   const router = useRouter()
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0)
   const [isFullScreen, setIsFullScreen] = React.useState(false)
+  const [showAllCustomFields, setShowAllCustomFields] = React.useState(false)
   const thumbnailRefs = React.useRef<(HTMLDivElement | null)[]>([])
 
   // Load real property data from database
@@ -26,6 +47,34 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
   const customFields = useQuery(api.properties.getPropertyCustomFields, { propertyId })
   const propertyAmenities = useQuery(api.properties.getPropertyAmenities, { propertyId })
   const multimedia = useQuery(api.properties.getPropertyMultimedia, { propertyId })
+
+  // Responsive custom field visibility
+  const getVisibleCustomFieldCount = () => {
+    // Use window width to determine how many fields to show initially
+    if (typeof window !== 'undefined') {
+      const width = window.innerWidth
+      if (width < 640) return 6 // mobile: 2 fields
+      if (width < 1024) return 12 // tablet: 3 fields
+      return 14 // desktop: 4 fields
+    }
+    return 14 // default for SSR
+  }
+
+  const [visibleFieldCount, setVisibleFieldCount] = React.useState(getVisibleCustomFieldCount())
+
+  // Update visible field count on window resize
+  React.useEffect(() => {
+    const handleResize = () => {
+      setVisibleFieldCount(getVisibleCustomFieldCount())
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Get visible custom fields
+  const visibleCustomFields = customFields?.slice(0, showAllCustomFields ? customFields.length : visibleFieldCount) || []
+  const hiddenFieldsCount = (customFields?.length || 0) - visibleFieldCount
 
   const handleBack = () => {
     router.push("/properties")
@@ -35,20 +84,20 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
     router.push(`/properties/add?id=${property.id}`)
   }
 
-  const getCurrentImages = () => {
+  const getCurrentImages = React.useCallback(() => {
     const images = multimedia?.filter(m => m.type === 'image') || []
     return images.length > 0 ? images.map(img => img.url) : (property.images || [])
-  }
+  }, [multimedia, property.images])
 
-  const nextImage = () => {
+  const nextImage = React.useCallback(() => {
     const images = getCurrentImages()
     setSelectedImageIndex((prev) => (prev + 1) % images.length)
-  }
+  }, [getCurrentImages])
 
-  const prevImage = () => {
+  const prevImage = React.useCallback(() => {
     const images = getCurrentImages()
     setSelectedImageIndex((prev) => (prev - 1 + images.length) % images.length)
-  }
+  }, [getCurrentImages])
 
   const openFullScreen = () => setIsFullScreen(true)
   const closeFullScreen = () => setIsFullScreen(false)
@@ -90,7 +139,7 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, []) // Empty dependency array since we're using functions defined in component scope
+  }, [getCurrentImages, nextImage, prevImage])
 
   // Icon mapping function
   const getIconComponent = (iconName?: string) => {
@@ -271,28 +320,70 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
               </div>
               
               {/* Display custom fields as property details */}
-              {customFields?.map((field) => {
+              {visibleCustomFields.map((field) => {
                 const IconComponent = getIconComponent(field.icon)
+                
+                // Check if field value is empty
+                const isEmpty = field.value === null || field.value === undefined || field.value === '' || 
+                               (typeof field.value === 'string' && field.value.trim() === '') ||
+                               (typeof field.value === 'number' && field.value === 0 && field.fieldType !== 'metric')
+                
+                // Get the display value
+                const getDisplayValue = () => {
+                  if (isEmpty) return 'Not provided'
+                  if (field.fieldType === 'boolean') return field.value ? 'Yes' : 'No'
+                  if (field.fieldType === 'currency') return `$${field.value}`
+                  if (field.fieldType === 'percentage') return `${field.value}%`
+                  if (field.fieldType === 'metric') return `${field.value}${field.unit ? ` ${field.unit}` : ''}`
+                  return String(field.value)
+                }
+                
+                const displayValue = getDisplayValue()
+                
                 return (
                   <div key={field._id} className="flex items-center gap-2">
-                    <IconComponent className="h-4 w-4 text-muted-foreground" />
-                    <span>{field.name}:</span>
-                    <span className="font-medium">
-                      {field.fieldType === 'boolean' 
-                        ? (field.value ? 'Yes' : 'No')
-                        : field.fieldType === 'currency'
-                        ? `$${field.value}`
-                        : field.fieldType === 'percentage'
-                        ? `${field.value}%`
-                        : field.fieldType === 'metric'
-                        ? `${field.value}${field.unit ? ` ${field.unit}` : ''}`
-                        : String(field.value)
-                      }
-                    </span>
+                    <IconComponent className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="flex-shrink-0">{field.name}:</span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span 
+                            className={`font-medium truncate ${isEmpty ? 'text-muted-foreground italic' : ''}`}
+                            title={displayValue}
+                          >
+                            {displayValue}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{displayValue}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                 )
               })}
             </div>
+
+            {/* Show More/Less Custom Field Style */}
+            {hiddenFieldsCount > 0 && !showAllCustomFields && (
+              <div 
+                className="flex items-center gap-2 cursor-pointer hover:font-bold hover:underline transition-all duration-200"
+                onClick={() => setShowAllCustomFields(true)}
+              >
+                <Plus className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">{hiddenFieldsCount} more fields</span>
+              </div>
+            )}
+
+            {showAllCustomFields && customFields && customFields.length > visibleFieldCount && (
+              <div 
+                className="flex items-center gap-2 cursor-pointer hover:font-bold hover:underline transition-all duration-200"
+                onClick={() => setShowAllCustomFields(false)}
+              >
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Show less</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -300,17 +391,17 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
       {/* Description Section */}
       <div className="space-y-6">
         <div className="prose max-w-none">
-          <p className="text-lg leading-relaxed text-muted-foreground">
-            {property.description}
-          </p>
+          <div className="text-lg leading-relaxed">
+            <RichTextRenderer content={property.description} />
+          </div>
         </div>
 
         {/* Amenities integrated into description */}
         <div className="flex justify-center">
           <div className="bg-muted/50 rounded-lg p-6 w-full">
             <div className="flex flex-wrap justify-center gap-4">
-              {amenities.map((amenity) => (
-                <div key={amenity.name} className="flex flex-col items-center gap-2 text-center w-24 md:w-28 lg:w-32">
+              {amenities.map((amenity, index) => (
+                <div key={`${amenity.name}-${index}`} className="flex flex-col items-center gap-2 text-center w-24 md:w-28 lg:w-32">
                   <amenity.icon className={`h-5 w-5 ${amenity.color}`} />
                   <span className="text-sm font-medium">{amenity.name}</span>
                 </div>
