@@ -90,6 +90,24 @@ export const updateMultimediaPriority = mutation({
   },
 });
 
+export const reorderMultimediaPriorities = mutation({
+  args: {
+    propertyId: v.id("properties"),
+    multimediaOrder: v.array(v.object({
+      multimediaId: v.id("multimedia"),
+      priority: v.number(),
+    })),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    // Update each multimedia item with its new priority
+    for (const item of args.multimediaOrder) {
+      await ctx.db.patch(item.multimediaId, { priority: item.priority });
+    }
+    return null;
+  },
+});
+
 // Custom Fields Mutations
 export const addCustomField = mutation({
   args: {

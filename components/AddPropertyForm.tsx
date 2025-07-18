@@ -63,6 +63,7 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [removedMultimediaIds, setRemovedMultimediaIds] = useState<string[]>([])
   const [updatedMultimediaDescriptions, setUpdatedMultimediaDescriptions] = useState<Record<string, string>>({})
+  const [reorderedMultimediaPriorities, setReorderedMultimediaPriorities] = useState<{ multimediaId: string; priority: number }[]>([])
 
   const createProperty = useMutation(api.properties.createProperty)
   const updateProperty = useMutation(api.properties.updateProperty)
@@ -70,6 +71,7 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
   const addPropertyAmenity = useMutation(api.properties.addPropertyAmenity)
   const addMultimedia = useMutation(api.properties.addMultimedia)
   const deleteMultimedia = useMutation(api.properties.deleteMultimedia)
+  const reorderMultimediaPriorities = useMutation(api.properties.reorderMultimediaPriorities)
   const createAmenity = useMutation(api.properties.createAmenity)
   const updateAmenity = useMutation(api.properties.updateAmenity)
 
@@ -137,6 +139,10 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
       ...prev,
       [multimediaId]: description
     }))
+  }
+
+  const handleReorderPriorities = (multimediaOrder: { multimediaId: string; priority: number }[]) => {
+    setReorderedMultimediaPriorities(multimediaOrder)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -270,7 +276,29 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
         }
       }
 
+      // Step 6.6: Update multimedia priorities if reordered
+      if (reorderedMultimediaPriorities.length > 0) {
+        try {
+          await reorderMultimediaPriorities({
+            propertyId: finalPropertyId,
+            multimediaOrder: reorderedMultimediaPriorities
+              .filter(item => !removedMultimediaIds.includes(item.multimediaId)) // filter out removed
+              .map(item => ({
+                multimediaId: item.multimediaId as Id<"multimedia">,
+                priority: item.priority
+              }))
+          })
+        } catch (priorityError) {
+          console.error('Error updating multimedia priorities:', priorityError)
+          // Continue with other operations even if priority update fails
+        }
+      }
+
       // Step 7: Handle multimedia files - upload to Supabase via backend and store URLs in Convex
+      // Calculate the starting priority for new files (after existing multimedia)
+      const existingMultimediaCount = existingMultimedia.filter(m => !removedMultimediaIds.includes(m._id)).length
+      const newFileStartPriority = existingMultimediaCount
+      
       for (const [index, fileUpload] of files.entries()) {
         try {
           // Determine the appropriate bucket based on file type
@@ -302,7 +330,7 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
             mimeType: fileUpload.file.type,
             order: index,
             description: fileUpload.description,
-            priority: index, // Use the index as priority (lower numbers = higher priority)
+            priority: newFileStartPriority + index, // Assign priority after existing multimedia
           })
         } catch (uploadError) {
           console.error(`Error uploading file ${fileUpload.file.name}:`, uploadError)
@@ -474,6 +502,7 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
               isEditMode={isEditMode}
               onRemoveExisting={handleRemoveExistingMultimedia}
               onUpdateExistingDescription={handleUpdateExistingDescription}
+              onReorderPriorities={handleReorderPriorities}
             />
           </CardContent>
         </Card>
