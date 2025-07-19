@@ -16,16 +16,7 @@ export default function PropertyDetailPage() {
     propertyId: propertyId as Id<"properties"> 
   })
 
-  if (property === undefined) {
-    return (
-      <DashboardLayout>
-        <div className="text-center py-12">
-          <p>Loading...</p>
-        </div>
-      </DashboardLayout>
-    )
-  }
-
+  // Only show "Property not found" if the query has resolved and returned null
   if (property === null) {
     return (
       <DashboardLayout>
@@ -36,8 +27,7 @@ export default function PropertyDetailPage() {
     )
   }
 
-  // Convert Convex property to the format expected by PropertyDetailView
-  const formattedProperty = {
+  const formattedProperty = property ? {
     id: property._id,
     title: property.title,
     type: property.type,
@@ -52,7 +42,7 @@ export default function PropertyDetailPage() {
     shares: property.shares || 0,
     notes: property.notes || 0,
     dateAdded: new Date(property._creationTime).toLocaleDateString(),
-  }
+  } : null
 
   return (
     <DashboardLayout>

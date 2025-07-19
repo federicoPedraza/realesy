@@ -2,18 +2,46 @@ import React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus } from "lucide-react"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Plus, Loader2 } from "lucide-react"
 import { Property } from "@/types/property"
 import { PropertyCard } from "./PropertyCard"
 
 interface PropertiesViewProps {
   properties: Property[]
   onAddProperty?: () => void
+  isLoading?: boolean
 }
+
+// Loading skeleton for property cards
+const PropertyCardSkeleton: React.FC = () => (
+  <Card className="overflow-hidden pt-0">
+    <div className="relative">
+      <Skeleton className="h-64 w-full" />
+      <Skeleton className="absolute top-2.5 right-2.5 h-6 w-16" />
+    </div>
+    <CardHeader>
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-6 w-20" />
+      </div>
+      <Skeleton className="h-4 w-48" />
+    </CardHeader>
+    <CardContent>
+      <div className="flex items-center space-x-4">
+        <Skeleton className="h-4 w-8" />
+        <Skeleton className="h-4 w-8" />
+        <Skeleton className="h-4 w-8" />
+      </div>
+    </CardContent>
+  </Card>
+)
 
 export const PropertiesView: React.FC<PropertiesViewProps> = ({
   properties,
   onAddProperty,
+  isLoading = false,
 }) => {
   const [searchQuery, setSearchQuery] = React.useState("")
   const [propertyType, setPropertyType] = React.useState("all")
@@ -21,7 +49,7 @@ export const PropertiesView: React.FC<PropertiesViewProps> = ({
 
   const filteredProperties = properties.filter((property) => {
     const matchesSearch = property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         property.location.toLowerCase().includes(searchQuery.toLowerCase())
+      property.location.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesType = propertyType === "all" || property.type.toLowerCase() === propertyType.toLowerCase()
     const matchesStatus = propertyStatus === "all" || property.status.toLowerCase() === propertyStatus.toLowerCase()
 
@@ -72,14 +100,30 @@ export const PropertiesView: React.FC<PropertiesViewProps> = ({
         </Select>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredProperties.map((property) => (
-          <PropertyCard
-            key={property.id}
-            property={property}
-          />
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center text-muted-foreground">
+              <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
+              <p className="text-sm">Loading properties...</p>
+            </div>
+          </div>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <PropertyCardSkeleton key={index} />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredProperties.map((property) => (
+            <PropertyCard
+              key={property.id}
+              property={property}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { useQuery } from "convex/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Skeleton } from "@/components/ui/skeleton"
 import { MapPin, Plus, ArrowLeft, ArrowRight, X, Flame, Waves, Car, Wifi, Tv, AirVent, Home, Pencil, Star, Calendar, Ruler, Users, Clock, Coffee, Camera, Music, Gamepad2, Utensils, Bed, Bath, Zap, Sun, Moon, Lock, Key, Dumbbell, Shield, TreePine, Building, ChevronUp } from "lucide-react"
 import { Property } from "@/types/property"
 import { api } from "@/convex/_generated/api"
@@ -30,8 +31,105 @@ const RichTextRenderer: React.FC<{ content: string }> = ({ content }) => {
 }
 
 interface PropertyDetailViewProps {
-  property: Property
+  property: Property | null
 }
+
+// Comprehensive skeleton for the entire page
+const PropertyDetailSkeleton: React.FC = () => (
+  <div className="space-y-6">
+    {/* Navigation buttons are always visible */}
+    <div className="flex items-center gap-4 mb-4">
+      <Button variant="outline" disabled>
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Properties
+      </Button>
+      <Button variant="outline" size="sm" disabled>
+        <Pencil className="h-4 w-4 mr-2" />
+        Edit Property
+      </Button>
+    </div>
+
+    {/* Main Content Grid */}
+    <div className="grid gap-8 lg:grid-cols-2">
+      {/* Left Column - Image Gallery */}
+      <div className="space-y-4">
+        {/* Main Image */}
+        <div className="relative">
+          <Skeleton className="w-full h-126 rounded-lg" />
+        </div>
+        
+        {/* Thumbnail Row */}
+        <div className="flex gap-2 overflow-x-auto">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="w-20 h-15 rounded flex-shrink-0" />
+          ))}
+        </div>
+      </div>
+
+      {/* Right Column - Property Details */}
+      <div className="space-y-6">
+        {/* Property Header */}
+        <div>
+          <Skeleton className="h-8 w-3/4 mb-2" />
+          <div className="flex items-center mb-4">
+            <Skeleton className="h-4 w-4 mr-1" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+          <Skeleton className="h-8 w-32 mb-4" />
+          <Skeleton className="h-6 w-20 mb-4" />
+        </div>
+
+        {/* Property Details Grid */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            {/* Property Type */}
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+            
+            {/* Custom Fields Skeletons */}
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Description Section */}
+    <div className="space-y-6">
+      {/* Description Text */}
+      <div className="prose max-w-none">
+        <div className="space-y-2">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-18 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
+
+      {/* Amenities Section */}
+      <div className="flex justify-center">
+        <div className="bg-muted/50 rounded-lg p-6 w-full">
+          <div className="flex flex-wrap justify-center gap-4">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div key={index} className="flex flex-col items-center gap-2 text-center w-24 md:w-28 lg:w-32">
+                <Skeleton className="h-5 w-5 rounded" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)
 
 export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
   property,
@@ -43,10 +141,18 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
   const thumbnailRefs = React.useRef<(HTMLDivElement | null)[]>([])
 
   // Load real property data from database
-  const propertyId = property.id as Id<"properties">
+  const propertyId = property?.id as Id<"properties">
   const customFields = useQuery(api.properties.getPropertyCustomFields, { propertyId })
   const propertyAmenities = useQuery(api.properties.getPropertyAmenities, { propertyId })
   const multimedia = useQuery(api.properties.getPropertyMultimedia, { propertyId })
+
+  // Check loading states
+  const isLoadingMultimedia = multimedia === undefined
+  const isLoadingCustomFields = customFields === undefined
+  const isLoadingAmenities = propertyAmenities === undefined
+
+  // Show skeleton if any data is still loading
+  const isLoading = isLoadingMultimedia || isLoadingCustomFields || isLoadingAmenities
 
   // Responsive custom field visibility
   const getVisibleCustomFieldCount = () => {
@@ -81,13 +187,13 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
   }
 
   const handleEdit = () => {
-    router.push(`/properties/add?id=${property.id}`)
+    router.push(`/properties/add?id=${property?.id}`)
   }
 
   const getCurrentImages = React.useCallback(() => {
     const images = multimedia?.filter(m => m.type === 'image') || []
-    return images.length > 0 ? images.map(img => img.url) : (property.images || [])
-  }, [multimedia, property.images])
+    return images.length > 0 ? images.map(img => img.url) : (property?.images || [])
+  }, [multimedia, property?.images])
 
   const nextImage = React.useCallback(() => {
     const images = getCurrentImages()
@@ -164,9 +270,14 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
     }
   }) || []
 
+  // Show skeleton if property is null (still loading) or if any data is loading
+  if (!property || isLoading) {
+    return <PropertyDetailSkeleton />
+  }
+
   return (
     <div className="space-y-6">
-      {/* Back Button and Actions */}
+      {/* Back Button and Actions - Always visible */}
       <div className="flex items-center gap-4 mb-4">
         <Button variant="outline" onClick={handleBack}>
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -398,7 +509,7 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
 
         {/* Amenities integrated into description */}
         <div className="flex justify-center">
-          <div className="bg-muted/50 rounded-lg p-6 w-full">
+          <div className="rounded-lg p-6 w-full">
             <div className="flex flex-wrap justify-center gap-4">
               {amenities.map((amenity, index) => (
                 <div key={`${amenity.name}-${index}`} className="flex flex-col items-center gap-2 text-center w-24 md:w-28 lg:w-32">
