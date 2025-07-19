@@ -10,6 +10,7 @@ import { MapPin, Plus, ArrowLeft, ArrowRight, X, Flame, Waves, Car, Wifi, Tv, Ai
 import { Property } from "@/types/property"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
+import { Contact } from "./Contact"
 
 // Rich Text Renderer Component
 const RichTextRenderer: React.FC<{ content: string }> = ({ content }) => {
@@ -142,9 +143,15 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
 
   // Load real property data from database
   const propertyId = property?.id as Id<"properties">
-  const customFields = useQuery(api.properties.getPropertyCustomFields, { propertyId })
-  const propertyAmenities = useQuery(api.properties.getPropertyAmenities, { propertyId })
-  const multimedia = useQuery(api.properties.getPropertyMultimedia, { propertyId })
+  const customFields = useQuery(api.properties.getPropertyCustomFields, 
+    propertyId ? { propertyId } : "skip"
+  )
+  const propertyAmenities = useQuery(api.properties.getPropertyAmenities, 
+    propertyId ? { propertyId } : "skip"
+  )
+  const multimedia = useQuery(api.properties.getPropertyMultimedia, 
+    propertyId ? { propertyId } : "skip"
+  )
 
   // Check loading states
   const isLoadingMultimedia = multimedia === undefined
@@ -394,107 +401,115 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
         </div>
 
         {/* Overview Data */}
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">{property.title}</h1>
-            <div className="flex items-center text-muted-foreground mb-4">
-              <MapPin className="h-4 w-4 mr-1" />
-              {property.location}
+        <div className="relative h-full min-h-0">
+          {/* Property Header and Details - Fixed at top */}
+          <div className="flex-shrink-0">
+            <div className="flex-shrink-0">
+              <h1 className="text-3xl font-bold mb-2">{property.title}</h1>
+              <div className="flex items-center text-muted-foreground mb-4">
+                <MapPin className="h-4 w-4 mr-1" />
+                {property.location}
+              </div>
+              <div className="text-2xl font-bold text-primary mb-4">
+                {(() => {
+                  const currency = property.currency || 'USD'
+                  const currencySymbol = currency === 'USD' ? '$' : 
+                                       currency === 'EUR' ? '€' : 
+                                       currency === 'GBP' ? '£' : 
+                                       currency === 'JPY' ? '¥' : 
+                                       currency === 'CAD' ? 'C$' : 
+                                       currency === 'AUD' ? 'A$' : 
+                                       currency === 'CHF' ? 'Fr' : 
+                                       currency === 'CNY' ? '¥' : '$'
+                  return `${currencySymbol}${property.price.toLocaleString()} ${currency}`
+                })()}
+                {property.status === "For Rent" && "/mo"}
+              </div>
+              <Badge variant={property.status === "For Sale" ? "default" : "secondary"} className="mb-4">
+                {property.status}
+              </Badge>
             </div>
-            <div className="text-2xl font-bold text-primary mb-4">
-              {(() => {
-                const currency = property.currency || 'USD'
-                const currencySymbol = currency === 'USD' ? '$' : 
-                                     currency === 'EUR' ? '€' : 
-                                     currency === 'GBP' ? '£' : 
-                                     currency === 'JPY' ? '¥' : 
-                                     currency === 'CAD' ? 'C$' : 
-                                     currency === 'AUD' ? 'A$' : 
-                                     currency === 'CHF' ? 'Fr' : 
-                                     currency === 'CNY' ? '¥' : '$'
-                return `${currencySymbol}${property.price.toLocaleString()} ${currency}`
-              })()}
-              {property.status === "For Rent" && "/mo"}
+
+            {/* Property Details - Scrollable if needed */}
+            <div className="flex-shrink-0 space-y-4 mb-6">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <Home className="h-4 w-4 text-muted-foreground" />
+                  <span>Type:</span>
+                  <span className="font-medium">{property.type}</span>
+                </div>
+                
+                {/* Display custom fields as property details */}
+                {visibleCustomFields.map((field) => {
+                  const IconComponent = getIconComponent(field.icon)
+                  
+                  // Check if field value is empty
+                  const isEmpty = field.value === null || field.value === undefined || field.value === '' || 
+                                 (typeof field.value === 'string' && field.value.trim() === '') ||
+                                 (typeof field.value === 'number' && field.value === 0 && field.fieldType !== 'metric')
+                  
+                  // Get the display value
+                  const getDisplayValue = () => {
+                    if (isEmpty) return 'Not provided'
+                    if (field.fieldType === 'boolean') return field.value ? 'Yes' : 'No'
+                    if (field.fieldType === 'currency') return `$${field.value}`
+                    if (field.fieldType === 'percentage') return `${field.value}%`
+                    if (field.fieldType === 'metric') return `${field.value}${field.unit ? ` ${field.unit}` : ''}`
+                    return String(field.value)
+                  }
+                  
+                  const displayValue = getDisplayValue()
+                  
+                  return (
+                    <div key={field._id} className="flex items-center gap-2">
+                      <IconComponent className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="flex-shrink-0">{field.name}:</span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span 
+                              className={`font-medium truncate ${isEmpty ? 'text-muted-foreground italic' : ''}`}
+                              title={displayValue}
+                            >
+                              {displayValue}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{displayValue}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Show More/Less Custom Field Style */}
+              {hiddenFieldsCount > 0 && !showAllCustomFields && (
+                <div 
+                  className="flex items-center gap-2 cursor-pointer hover:font-bold hover:underline transition-all duration-200"
+                  onClick={() => setShowAllCustomFields(true)}
+                >
+                  <Plus className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{hiddenFieldsCount} more fields</span>
+                </div>
+              )}
+
+              {showAllCustomFields && customFields && customFields.length > visibleFieldCount && (
+                <div 
+                  className="flex items-center gap-2 cursor-pointer hover:font-bold hover:underline transition-all duration-200"
+                  onClick={() => setShowAllCustomFields(false)}
+                >
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">Show less</span>
+                </div>
+              )}
             </div>
-            <Badge variant={property.status === "For Sale" ? "default" : "secondary"} className="mb-4">
-              {property.status}
-            </Badge>
           </div>
 
-          {/* Property Details - No Card Container */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <Home className="h-4 w-4 text-muted-foreground" />
-                <span>Type:</span>
-                <span className="font-medium">{property.type}</span>
-              </div>
-              
-              {/* Display custom fields as property details */}
-              {visibleCustomFields.map((field) => {
-                const IconComponent = getIconComponent(field.icon)
-                
-                // Check if field value is empty
-                const isEmpty = field.value === null || field.value === undefined || field.value === '' || 
-                               (typeof field.value === 'string' && field.value.trim() === '') ||
-                               (typeof field.value === 'number' && field.value === 0 && field.fieldType !== 'metric')
-                
-                // Get the display value
-                const getDisplayValue = () => {
-                  if (isEmpty) return 'Not provided'
-                  if (field.fieldType === 'boolean') return field.value ? 'Yes' : 'No'
-                  if (field.fieldType === 'currency') return `$${field.value}`
-                  if (field.fieldType === 'percentage') return `${field.value}%`
-                  if (field.fieldType === 'metric') return `${field.value}${field.unit ? ` ${field.unit}` : ''}`
-                  return String(field.value)
-                }
-                
-                const displayValue = getDisplayValue()
-                
-                return (
-                  <div key={field._id} className="flex items-center gap-2">
-                    <IconComponent className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="flex-shrink-0">{field.name}:</span>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span 
-                            className={`font-medium truncate ${isEmpty ? 'text-muted-foreground italic' : ''}`}
-                            title={displayValue}
-                          >
-                            {displayValue}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>{displayValue}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Show More/Less Custom Field Style */}
-            {hiddenFieldsCount > 0 && !showAllCustomFields && (
-              <div 
-                className="flex items-center gap-2 cursor-pointer hover:font-bold hover:underline transition-all duration-200"
-                onClick={() => setShowAllCustomFields(true)}
-              >
-                <Plus className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{hiddenFieldsCount} more fields</span>
-              </div>
-            )}
-
-            {showAllCustomFields && customFields && customFields.length > visibleFieldCount && (
-              <div 
-                className="flex items-center gap-2 cursor-pointer hover:font-bold hover:underline transition-all duration-200"
-                onClick={() => setShowAllCustomFields(false)}
-              >
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">Show less</span>
-              </div>
-            )}
+          {/* Contact Component - Fixed at bottom, expands upward */}
+          <div className="absolute bottom-0 left-0 right-0 z-10">
+            <Contact />
           </div>
         </div>
       </div>
