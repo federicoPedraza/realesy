@@ -514,17 +514,44 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-4">
-        <Button variant="outline" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Properties
-        </Button>
-        <h1 className="text-2xl font-bold">
-          {isEditMode ? 'Edit Property' : 'Add New Property'}
-        </h1>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Properties
+          </Button>
+          <h1 className="text-2xl font-bold">
+            {isEditMode ? 'Edit Property' : 'Add New Property'}
+          </h1>
+        </div>
+        
+        {/* Top Action Buttons */}
+        <div className="flex space-x-4">
+          <Button type="button" variant="outline" onClick={onBack}>
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={!isFormValid() || isSubmitting}
+            className="min-w-[120px]"
+            form="property-form"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {isEditMode ? 'Updating...' : 'Creating...'}
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                {isEditMode ? 'Update Property' : 'Create Property'}
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form id="property-form" onSubmit={handleSubmit} className="space-y-8">
         {/* Property Details */}
         <Card>
           <CardHeader>
