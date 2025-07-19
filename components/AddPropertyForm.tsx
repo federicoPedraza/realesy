@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, Loader2, Bold, Italic, Underline } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { ArrowLeft, Save, Loader2, Bold, Italic, Underline, Eye } from "lucide-react"
 import { PhotoUpload } from "@/components/PhotoUpload"
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor"
 import { AmenitiesEditor } from "@/components/AmenitiesEditor"
+import { PropertyPreviewCard } from "@/components/PropertyPreviewCard"
 import { useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
@@ -23,7 +25,8 @@ import {
   ConvexCustomField,
   ConvexPropertyAmenity,
   ConvexMultimedia,
-  CURRENCIES
+  CURRENCIES,
+  Property
 } from "@/types/property"
 
 // Rich Text Renderer Component
@@ -511,6 +514,41 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
            formData.price > 0
   }
 
+  // Create a preview property object from current form data
+  const createPreviewProperty = (): Property => {
+    // Get existing multimedia images (filter out removed ones)
+    const existingImages = existingMultimedia
+      .filter(m => m.type === 'image' && !removedMultimediaIds.includes(m._id))
+      .sort((a, b) => (a.priority || 0) - (b.priority || 0))
+      .map(m => m.url)
+
+    // Convert uploaded files to image URLs for preview
+    const newImages = files
+      .filter(file => file.type === 'image')
+      .map(file => file.preview)
+      .filter(Boolean)
+
+    // Combine existing and new images
+    const previewImages = [...existingImages, ...newImages]
+
+    return {
+      id: propertyId || 'preview',
+      title: formData.title || 'Preview Property',
+      type: formData.type,
+      price: formData.price || 0,
+      currency: formData.currency,
+      status: formData.status,
+      location: formData.location || 'Location',
+      description: formData.description || 'Description',
+      images: previewImages,
+      views: 0,
+      likes: 0,
+      shares: 0,
+      notes: 0,
+      dateAdded: new Date().toISOString(),
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -530,6 +568,27 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
           <Button type="button" variant="outline" onClick={onBack}>
             Cancel
           </Button>
+          
+          {/* Preview Button */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button type="button" variant="outline">
+                <Eye className="h-4 w-4 mr-2" />
+                Preview
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Property Preview</DialogTitle>
+              </DialogHeader>
+                              <div className="flex justify-center">
+                  <div className="w-full max-w-md">
+                    <PropertyPreviewCard property={createPreviewProperty()} />
+                  </div>
+                </div>
+            </DialogContent>
+          </Dialog>
+          
           <Button 
             type="submit" 
             disabled={!isFormValid() || isSubmitting}
