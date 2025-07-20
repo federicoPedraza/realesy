@@ -42,15 +42,15 @@ const PropertyDetailSkeleton: React.FC = () => (
     {/* Navigation buttons are always visible */}
     <div className="flex items-center gap-4 mb-4">
       <Button variant="outline" disabled>
-        <ArrowLeft className="h-4 w-4 mr-2" />
+        <ArrowLeft className="h-4 w-4" />
         Back to Properties
       </Button>
       <Button variant="outline" size="sm" disabled>
-        <Pencil className="h-4 w-4 mr-2" />
+        <Pencil className="h-4 w-4" />
         Edit Property
       </Button>
       <Button variant="outline" size="sm" disabled>
-        <Share2 className="h-4 w-4 mr-2" />
+        <Share2 className="h-4 w-4" />
         Share
       </Button>
     </div>
@@ -292,11 +292,11 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
       {/* Back Button and Actions - Always visible */}
       <div className="flex items-center gap-4 mb-4">
         <Button variant="outline" onClick={handleBack}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          <ArrowLeft className="h-4 w-4" />
           Back to Properties
         </Button>
         <Button variant="outline" size="sm" onClick={handleEdit}>
-          <Pencil className="h-4 w-4 mr-2" />
+          <Pencil className="h-4 w-4" />
           Edit Property
         </Button>
         <ShareModal 
@@ -306,7 +306,7 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
           multimedia={multimedia}
         >
           <Button variant="outline" size="sm">
-            <Share2 className="h-4 w-4 mr-2" />
+            <Share2 className="h-4 w-4" />
             Share
           </Button>
         </ShareModal>

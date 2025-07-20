@@ -4,7 +4,7 @@ import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { X, Upload, Image as ImageIcon, Video, File, Plus, GripVertical } from "lucide-react"
+import { X, Upload, Image as ImageIcon, Video, File, Plus } from "lucide-react"
 import { FileUpload, ConvexMultimedia } from "@/types/property"
 import {
   DndContext,
@@ -36,14 +36,20 @@ interface PhotoUploadProps {
   onRemoveExisting?: (multimediaId: string) => void
   onReorderExisting?: (multimedia: ConvexMultimedia[]) => void
   onReorderPriorities?: (multimediaOrder: { multimediaId: string; priority: number }[]) => void
+  onUnifiedOrderChange?: (order: Array<{ id: string; type: 'existing' | 'new'; index?: number }>) => void
 }
 
-// Sortable item component for existing multimedia
-const SortableExistingItem = ({ 
-  media, 
+// Unified sortable item component for both existing and new multimedia
+const SortableItem = ({ 
+  item,
   onRemove
 }: {
-  media: ConvexMultimedia
+  item: { 
+    id: string
+    type: 'existing' | 'new'
+    data: ConvexMultimedia | FileUpload
+    order: number
+  }
   onRemove: (id: string) => void
 }) => {
   const {
@@ -53,7 +59,7 @@ const SortableExistingItem = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `existing-${media._id}` })
+  } = useSortable({ id: item.id })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -70,7 +76,14 @@ const SortableExistingItem = ({
     }
   }
 
-  const Icon = getFileIcon(media.type)
+  const isNew = item.type === 'new'
+  const mediaData = item.data
+  const fileType = isNew ? (mediaData as FileUpload).type : (mediaData as ConvexMultimedia).type
+  const filename = isNew ? (mediaData as FileUpload).file.name : (mediaData as ConvexMultimedia).filename
+  const imageSrc = isNew ? (mediaData as FileUpload).preview : (mediaData as ConvexMultimedia).url
+  const imageAlt = isNew ? `Upload ${item.order}` : `Existing ${filename}`
+
+  const Icon = getFileIcon(fileType)
 
   return (
     <Card 
@@ -80,10 +93,10 @@ const SortableExistingItem = ({
     >
       <CardContent className="px-2 py-0">
         <div className="min-h-52 relative bg-muted rounded-lg overflow-hidden">
-          {media.type === 'image' ? (
+          {fileType === 'image' ? (
             <Image
-              src={media.url}
-              alt={`Existing ${media.filename}`}
+              src={imageSrc}
+              alt={imageAlt}
               fill
               className="object-cover"
               onError={(e) => {
@@ -95,7 +108,7 @@ const SortableExistingItem = ({
             <div className="w-full h-full flex flex-col items-center justify-center">
               <Icon className="h-8 w-8 text-muted-foreground mb-2" />
               <p className="text-xs text-center text-muted-foreground truncate">
-                {media.filename}
+                {filename}
               </p>
             </div>
           )}
@@ -105,126 +118,27 @@ const SortableExistingItem = ({
             variant="secondary" 
             className="absolute bottom-1 left-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
           >
-            {media.type.charAt(0).toUpperCase() + media.type.slice(1)}
+            {fileType.charAt(0).toUpperCase() + fileType.slice(1)}
           </Badge>
 
-          {/* Drag handle */}
+          {/* Drag handle - entire image area */}
           <div
             {...attributes}
             {...listeners}
-            className="absolute top-2 left-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-background/80 rounded cursor-grab active:cursor-grabbing flex items-center justify-center"
+            className="absolute inset-0 cursor-grab active:cursor-grabbing z-10"
             onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="h-3 w-3 text-muted-foreground" />
-          </div>
+          />
         </div>
 
-        {/* Remove button for existing media */}
+        {/* Remove button */}
         <Button
           type="button"
           variant="destructive"
           size="sm"
-          className="absolute top-2 right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+          className="absolute top-3 right-3 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity z-10"
           onClick={(e) => {
             e.stopPropagation();
-            onRemove(media._id);
-          }}
-        >
-          <X className="h-3 w-3" />
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-
-// Sortable item component for new files
-const SortableNewItem = ({ 
-  fileUpload, 
-  index, 
-  onRemove
-}: {
-  fileUpload: FileUpload
-  index: number
-  onRemove: (index: number) => void
-}) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: `new-${index}` })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  }
-
-  const getFileIcon = (type: 'image' | 'video' | 'document') => {
-    switch (type) {
-      case 'image': return ImageIcon
-      case 'video': return Video
-      case 'document': return File
-      default: return File
-    }
-  }
-
-  const Icon = getFileIcon(fileUpload.type)
-
-  return (
-    <Card 
-      ref={setNodeRef}
-      style={style}
-      className="relative group py-2 px-4 cursor-pointer hover:shadow-md transition-shadow"
-    >
-      <CardContent className="px-2 py-0">
-        <div className="h-52 relative bg-muted rounded-lg overflow-hidden">
-          {fileUpload.type === 'image' ? (
-            <Image
-              src={fileUpload.preview}
-              alt={`Upload ${index + 1}`}
-              fill
-              className="object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center">
-              <Icon className="h-8 w-8 text-muted-foreground mb-2" />
-              <p className="text-xs text-center text-muted-foreground truncate">
-                {fileUpload.file.name}
-              </p>
-            </div>
-          )}
-
-          {/* File type badge */}
-          <Badge 
-            variant="secondary" 
-            className="absolute bottom-1 left-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            {fileUpload.type.charAt(0).toUpperCase() + fileUpload.type.slice(1)}
-          </Badge>
-
-          {/* Drag handle */}
-          <div
-            {...attributes}
-            {...listeners}
-            className="absolute top-2 left-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-background/80 rounded cursor-grab active:cursor-grabbing flex items-center justify-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="h-3 w-3 text-muted-foreground" />
-          </div>
-        </div>
-
-        {/* Remove button for new files */}
-        <Button
-          type="button"
-          variant="destructive"
-          size="sm"
-          className="absolute top-2 right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove(index);
+            onRemove(item.id);
           }}
         >
           <X className="h-3 w-3" />
@@ -243,12 +157,20 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
   isEditMode = false,
   onRemoveExisting,
   onReorderExisting,
-  onReorderPriorities
+  onReorderPriorities,
+  onUnifiedOrderChange
 }) => {
   const [dragActive, setDragActive] = useState(false)
   const [orderedExistingMultimedia, setOrderedExistingMultimedia] = useState<ConvexMultimedia[]>(
     existingMultimedia.sort((a, b) => (a.priority || 0) - (b.priority || 0))
   )
+  const [unifiedItems, setUnifiedItems] = useState<Array<{ 
+    id: string
+    type: 'existing' | 'new'
+    data: ConvexMultimedia | FileUpload
+    order: number
+  }>>([])
+  const [isDragging, setIsDragging] = useState(false)
 
   // Update ordered multimedia when existingMultimedia prop changes
   // Only update if the multimedia items themselves have changed (not just reordering)
@@ -263,6 +185,42 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
       )
     }
   }, [existingMultimedia, orderedExistingMultimedia])
+
+  // Initialize and update unified items when existing multimedia or files change
+  useEffect(() => {
+    // Don't update unified items during drag operations
+    if (isDragging) return
+
+    const newUnifiedItems: Array<{ 
+      id: string
+      type: 'existing' | 'new'
+      data: ConvexMultimedia | FileUpload
+      order: number
+    }> = []
+
+    // Add existing items with their current order
+    orderedExistingMultimedia.forEach((media, index) => {
+      newUnifiedItems.push({
+        id: `existing-${media._id}`,
+        type: 'existing',
+        data: media,
+        order: index
+      })
+    })
+
+    // Add new items with order numbers continuing from the last existing item
+    const lastOrder = newUnifiedItems.length > 0 ? Math.max(...newUnifiedItems.map(item => item.order)) : -1
+    files.forEach((fileUpload, index) => {
+      newUnifiedItems.push({
+        id: `new-${index}`,
+        type: 'new',
+        data: fileUpload,
+        order: lastOrder + 1 + index
+      })
+    })
+
+    setUnifiedItems(newUnifiedItems)
+  }, [orderedExistingMultimedia, files, isDragging])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -287,8 +245,26 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
 
     const updatedFiles = [...files, ...newFiles].slice(0, maxFiles)
     onFilesChange(updatedFiles)
+    
+    // Update unified items immediately with new files
+    const lastOrder = unifiedItems.length > 0 ? Math.max(...unifiedItems.map(item => item.order)) : -1
+    const newUnifiedItems = [...unifiedItems]
+    
+    newFiles.forEach((fileUpload, index) => {
+      const globalIndex = files.length + index
+      if (globalIndex < maxFiles) {
+        newUnifiedItems.push({
+          id: `new-${globalIndex}`,
+          type: 'new',
+          data: fileUpload,
+          order: lastOrder + 1 + index
+        })
+      }
+    })
+    
+    setUnifiedItems(newUnifiedItems)
     setDragActive(false)
-  }, [files, onFilesChange, maxFiles])
+  }, [files, onFilesChange, maxFiles, unifiedItems])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -299,9 +275,23 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
     onDragLeave: () => setDragActive(false)
   })
 
-  const removeFile = (index: number) => {
-    const newFiles = files.filter((_, i) => i !== index)
-    onFilesChange(newFiles)
+  const removeItem = (itemId: string) => {
+    const item = unifiedItems.find(item => item.id === itemId)
+    if (!item) return
+
+    if (item.type === 'existing') {
+      onRemoveExisting?.(itemId.replace('existing-', ''))
+    } else {
+      const fileIndex = files.findIndex((_, index) => `new-${index}` === itemId)
+      if (fileIndex !== -1) {
+        const newFiles = files.filter((_, i) => i !== fileIndex)
+        onFilesChange(newFiles)
+      }
+    }
+  }
+
+  const handleDragStart = () => {
+    setIsDragging(true)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -312,51 +302,66 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
       const activeId = active.id as string
       const overId = over?.id as string
 
-      // Handle reordering existing multimedia
-      if (activeId.startsWith('existing-') && overId.startsWith('existing-')) {
-        const activeIndex = orderedExistingMultimedia.findIndex(
-          item => `existing-${item._id}` === activeId
-        )
-        const overIndex = orderedExistingMultimedia.findIndex(
-          item => `existing-${item._id}` === overId
-        )
+      // Find indices in unified items
+      const activeIndex = unifiedItems.findIndex(item => item.id === activeId)
+      const overIndex = unifiedItems.findIndex(item => item.id === overId)
 
-        console.log('Reordering existing multimedia:', { activeIndex, overIndex })
-
-        if (activeIndex !== -1 && overIndex !== -1) {
-          const newOrder = arrayMove(orderedExistingMultimedia, activeIndex, overIndex)
-          console.log('New order:', newOrder.map(item => item.filename))
-          setOrderedExistingMultimedia(newOrder)
-          onReorderExisting?.(newOrder)
+      if (activeIndex !== -1 && overIndex !== -1) {
+        // Reorder the unified items array
+        const newUnifiedItems = arrayMove(unifiedItems, activeIndex, overIndex)
+        
+        // Update order numbers
+        newUnifiedItems.forEach((item, index) => {
+          item.order = index
+        })
+        
+        // Update the unified items state
+        setUnifiedItems(newUnifiedItems)
+        
+        // Extract existing multimedia in new order
+        const newExistingOrder = newUnifiedItems
+          .filter(item => item.type === 'existing')
+          .map(item => item.data as ConvexMultimedia)
+        
+        // Extract new files in new order
+        const newFilesOrder = newUnifiedItems
+          .filter(item => item.type === 'new')
+          .map(item => item.data as FileUpload)
+        
+        // Update existing multimedia order
+        if (newExistingOrder.length > 0) {
+          setOrderedExistingMultimedia(newExistingOrder)
+          onReorderExisting?.(newExistingOrder)
           
-          // Calculate new priorities based on the new order
-          const multimediaOrder = newOrder.map((item, index) => ({
+          // Calculate new priorities for existing multimedia
+          const multimediaOrder = newExistingOrder.map((item, index) => ({
             multimediaId: item._id,
             priority: index
           }))
-          console.log('New priorities:', multimediaOrder)
           onReorderPriorities?.(multimediaOrder)
         }
-      }
 
-      // Handle reordering new files
-      if (activeId.startsWith('new-') && overId.startsWith('new-')) {
-        const activeIndex = parseInt(activeId.replace('new-', ''))
-        const overIndex = parseInt(overId.replace('new-', ''))
-
-        if (!isNaN(activeIndex) && !isNaN(overIndex)) {
-          const newFiles = arrayMove(files, activeIndex, overIndex)
-          onFilesChange(newFiles)
+        // Update new files order
+        if (newFilesOrder.length > 0) {
+          onFilesChange(newFilesOrder)
         }
+
+        // Notify parent of unified order change
+        const unifiedOrderForParent = newUnifiedItems.map(item => ({
+          id: item.id,
+          type: item.type,
+          index: item.type === 'new' ? newFilesOrder.indexOf(item.data as FileUpload) : undefined
+        }))
+        onUnifiedOrderChange?.(unifiedOrderForParent)
       }
     }
+    
+    // End dragging state
+    setIsDragging(false)
   }
 
   // Create sortable items array
-  const sortableItems = [
-    ...orderedExistingMultimedia.map(media => `existing-${media._id}`),
-    ...files.map((_, index) => `new-${index}`)
-  ]
+  const sortableItems = unifiedItems.map(item => item.id)
 
   return (
     <div className="space-y-4">
@@ -413,26 +418,17 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={sortableItems} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {/* Existing multimedia */}
-              {isEditMode && orderedExistingMultimedia.map((media) => (
-                <SortableExistingItem
-                  key={`existing-${media._id}`}
-                  media={media}
-                  onRemove={onRemoveExisting || (() => {})}
-                />
-              ))}
-
-              {/* New file uploads */}
-              {files.map((fileUpload, index) => (
-                <SortableNewItem
-                  key={`new-${index}`}
-                  fileUpload={fileUpload}
-                  index={index}
-                  onRemove={removeFile}
+              {/* Render all items in unified order */}
+              {unifiedItems.map((item) => (
+                <SortableItem
+                  key={item.id}
+                  item={item}
+                  onRemove={removeItem}
                 />
               ))}
             </div>
@@ -443,7 +439,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
       {/* Help text */}
       <p className="text-xs text-muted-foreground">
         {isEditMode 
-          ? "Note: New files will be uploaded when you save. Existing media will be preserved. Drag items to reorder them."
+          ? "Note: New files (marked with 'New' badge) will be uploaded when you save. Existing media will be preserved. Drag items to reorder them in any order."
           : "Note: Files are not uploaded to the server yet. They will be processed when you save the property. Drag items to reorder them."
         }
       </p>

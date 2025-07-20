@@ -47,13 +47,13 @@ export const Contact = () => {
   useEffect(() => {
     // Set a fixed height for smooth transitions
     const heights = {
-      initial: 75,
+      initial: 40,
       name: 175,
       email: 175,
       phone: 175,
       preference: 200,
       success: 115,
-      successButton: 75
+      successButton: 40
     }
     setContainerHeight(heights[currentStep as keyof typeof heights] || 'auto')
   }, [currentStep])
@@ -260,7 +260,7 @@ export const Contact = () => {
   if (currentStep === 'initial') {
     return (
       <div 
-        className="bg-background border rounded-lg p-4 shadow-sm transition-[height] duration-300 ease-in-out"
+        className="bg-background border rounded-lg shadow-sm transition-[height] duration-300 ease-in-out"
         style={{ 
           height: containerHeight === 'auto' ? 'auto' : `${containerHeight}px`,
           overflow: 'hidden'
@@ -273,7 +273,7 @@ export const Contact = () => {
           size="lg"
           onClick={() => setCurrentStep('name')}
         >
-          <Send className="h-4 w-4 mr-2" />
+          <Send className="h-4 w-4" />
           Contact Agent
         </Button>
       </div>
@@ -285,7 +285,8 @@ export const Contact = () => {
       className="bg-background border rounded-lg p-4 shadow-sm transition-[height] duration-300 ease-in-out"
       style={{ 
         height: containerHeight === 'auto' ? 'auto' : `${containerHeight}px`,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        padding: currentStep === 'successButton' ? '0px' : '16px'
       }}
     >
       <div className="space-y-4">
@@ -339,7 +340,7 @@ export const Contact = () => {
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={goBack} className="flex-1">
-              <ArrowLeft className="h-4 w-4 mr-2" />
+              <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
             <Button type="submit" className="flex-1" disabled={!!errors.email}>
@@ -373,7 +374,7 @@ export const Contact = () => {
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={goBack} className="flex-1">
-              <ArrowLeft className="h-4 w-4 mr-2" />
+              <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
             {canSkipPhone() && (
@@ -411,10 +412,10 @@ export const Contact = () => {
                   className="justify-start"
                   onClick={() => togglePreference(preference)}
                 >
-                  {preference === 'call' && <Phone className="h-4 w-4 mr-2" />}
-                  {preference === 'sms' && <MessageSquare className="h-4 w-4 mr-2" />}
-                  {preference === 'whatsapp' && <WhatsAppIcon className="h-4 w-4 mr-2" />}
-                  {preference === 'email' && <Mail className="h-4 w-4 mr-2" />}
+                  {preference === 'call' && <Phone className="h-4 w-4" />}
+                  {preference === 'sms' && <MessageSquare className="h-4 w-4" />}
+                  {preference === 'whatsapp' && <WhatsAppIcon className="h-4 w-4" />}
+                  {preference === 'email' && <Mail className="h-4 w-4" />}
                   {preference === 'call' && 'Call'}
                   {preference === 'sms' && 'SMS'}
                   {preference === 'whatsapp' && 'WhatsApp'}
@@ -425,7 +426,7 @@ export const Contact = () => {
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={goBack} className="flex-1">
-              <ArrowLeft className="h-4 w-4 mr-2" />
+              <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
             <Button 
@@ -467,7 +468,7 @@ export const Contact = () => {
           size="lg"
           disabled
         >
-          <CircleCheck className="h-10 w-10 text-green-100" strokeWidth={2} />
+          <CircleCheck className="h-10 w-10 text-white" strokeWidth={2} />
         </Button>
       )}
       </div>

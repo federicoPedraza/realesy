@@ -243,6 +243,7 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [removedMultimediaIds, setRemovedMultimediaIds] = useState<string[]>([])
   const [reorderedMultimediaPriorities, setReorderedMultimediaPriorities] = useState<{ multimediaId: string; priority: number }[]>([])
+  const [unifiedMultimediaOrder, setUnifiedMultimediaOrder] = useState<Array<{ id: string; type: 'existing' | 'new'; index?: number }>>([])
 
   const createProperty = useMutation(api.properties.createProperty)
   const updateProperty = useMutation(api.properties.updateProperty)
@@ -316,6 +317,10 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
 
   const handleReorderPriorities = (multimediaOrder: { multimediaId: string; priority: number }[]) => {
     setReorderedMultimediaPriorities(multimediaOrder)
+  }
+
+  const handleUnifiedMultimediaOrder = (order: Array<{ id: string; type: 'existing' | 'new'; index?: number }>) => {
+    setUnifiedMultimediaOrder(order)
   }
 
   const handleImportData = (importedData: {
@@ -470,46 +475,59 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
       }
 
       // Step 7: Handle multimedia files - upload to Supabase via backend and store URLs in Convex
-      // Calculate the starting priority for new files (after existing multimedia)
-      const existingMultimediaCount = existingMultimedia.filter(m => !removedMultimediaIds.includes(m._id)).length
-      const newFileStartPriority = existingMultimediaCount
-      
-      for (const [index, fileUpload] of files.entries()) {
-        try {
-          // Determine the appropriate bucket based on file type
-          const bucket = getBucketForFileType(fileUpload.file.type)
-          
-          // Upload file to Supabase via backend HTTP endpoint
-          let uploadResult
-          switch (bucket) {
-            case 'images':
-              uploadResult = await uploadImage(fileUpload.file)
-              break
-            case 'videos':
-              uploadResult = await uploadVideo(fileUpload.file)
-              break
-            case 'documents':
-              uploadResult = await uploadDocument(fileUpload.file)
-              break
-            default:
-              uploadResult = await uploadImage(fileUpload.file)
+      // Use unified order to determine priorities for both existing and new files
+      const finalMultimediaOrder = unifiedMultimediaOrder.length > 0 
+        ? unifiedMultimediaOrder 
+        : [
+            // Default order: existing multimedia first, then new files
+            ...existingMultimedia
+              .filter(m => !removedMultimediaIds.includes(m._id))
+              .map(m => ({ id: m._id, type: 'existing' as const })),
+            ...files.map((_, index) => ({ id: `new-${index}`, type: 'new' as const, index }))
+          ]
+
+      // Upload new files in the order specified by unifiedMultimediaOrder
+      for (const [orderIndex, item] of finalMultimediaOrder.entries()) {
+        if (item.type === 'new' && item.index !== undefined) {
+          const fileUpload = files[item.index]
+          if (!fileUpload) continue
+
+          try {
+            // Determine the appropriate bucket based on file type
+            const bucket = getBucketForFileType(fileUpload.file.type)
+            
+            // Upload file to Supabase via backend HTTP endpoint
+            let uploadResult
+            switch (bucket) {
+              case 'images':
+                uploadResult = await uploadImage(fileUpload.file)
+                break
+              case 'videos':
+                uploadResult = await uploadVideo(fileUpload.file)
+                break
+              case 'documents':
+                uploadResult = await uploadDocument(fileUpload.file)
+                break
+              default:
+                uploadResult = await uploadImage(fileUpload.file)
+            }
+            
+            // Store the Supabase URL in Convex with the correct priority
+            await addMultimedia({
+              propertyId: finalPropertyId,
+              type: fileUpload.type,
+              filename: fileUpload.file.name,
+              url: uploadResult.url, // Supabase public URL from backend response
+              fileSize: fileUpload.file.size,
+              mimeType: fileUpload.file.type,
+              order: item.index, // Keep original file index for reference
+              description: fileUpload.description,
+              priority: orderIndex, // Use unified order index as priority
+            })
+          } catch (uploadError) {
+            console.error(`Error uploading file ${fileUpload.file.name}:`, uploadError)
+            // Continue with other files even if one fails
           }
-          
-          // Store the Supabase URL in Convex
-          await addMultimedia({
-            propertyId: finalPropertyId,
-            type: fileUpload.type,
-            filename: fileUpload.file.name,
-            url: uploadResult.url, // Supabase public URL from backend response
-            fileSize: fileUpload.file.size,
-            mimeType: fileUpload.file.type,
-            order: index,
-            description: fileUpload.description,
-            priority: newFileStartPriority + index, // Assign priority after existing multimedia
-          })
-        } catch (uploadError) {
-          console.error(`Error uploading file ${fileUpload.file.name}:`, uploadError)
-          // Continue with other files even if one fails
         }
       }
 
@@ -532,31 +550,33 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
 
   // Create a preview property object from current form data
   const createPreviewProperty = (): Property => {
-    // Create a map of multimedia ID to reordered priority
-    const reorderedPriorityMap = new Map<string, number>()
-    reorderedMultimediaPriorities.forEach(item => {
-      reorderedPriorityMap.set(item.multimediaId, item.priority)
-    })
+    // Use unified order to determine the final image order
+    const finalMultimediaOrder = unifiedMultimediaOrder.length > 0 
+      ? unifiedMultimediaOrder 
+      : [
+          // Default order: existing multimedia first, then new files
+          ...existingMultimedia
+            .filter(m => !removedMultimediaIds.includes(m._id))
+            .map(m => ({ id: m._id, type: 'existing' as const })),
+          ...files.map((_, index) => ({ id: `new-${index}`, type: 'new' as const, index }))
+        ]
 
-    // Get existing multimedia images (filter out removed ones) with proper ordering
-    const existingImages = existingMultimedia
-      .filter(m => m.type === 'image' && !removedMultimediaIds.includes(m._id))
-      .map(m => ({
-        ...m,
-        // Use reordered priority if available, otherwise use original priority
-        priority: reorderedPriorityMap.get(m._id) ?? (m.priority || 0)
-      }))
-      .sort((a, b) => a.priority - b.priority)
-      .map(m => m.url)
-
-    // Convert uploaded files to image URLs for preview
-    const newImages = files
-      .filter(file => file.type === 'image')
-      .map(file => file.preview)
-      .filter(Boolean)
-
-    // Combine existing and new images
-    const previewImages = [...existingImages, ...newImages]
+    // Build preview images array based on unified order
+    const previewImages: string[] = []
+    
+    for (const item of finalMultimediaOrder) {
+      if (item.type === 'existing') {
+        const existingMedia = existingMultimedia.find(m => m._id === item.id)
+        if (existingMedia && existingMedia.type === 'image') {
+          previewImages.push(existingMedia.url)
+        }
+      } else if (item.type === 'new' && item.index !== undefined) {
+        const newFile = files[item.index]
+        if (newFile && newFile.type === 'image' && newFile.preview) {
+          previewImages.push(newFile.preview)
+        }
+      }
+    }
 
     return {
       id: propertyId || 'preview',
@@ -582,7 +602,7 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <Button variant="outline" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            <ArrowLeft className="h-4 w-4" />
             Back to Properties
           </Button>
           <h1 className="text-2xl font-bold">
@@ -600,7 +620,7 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
           {!isEditMode && (
             <ImportModal onImport={handleImportData}>
               <Button type="button" variant="outline">
-                <Upload className="h-4 w-4 mr-2" />
+                <Upload className="h-4 w-4" />
                 Import
               </Button>
             </ImportModal>
@@ -610,7 +630,7 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
           <Dialog>
             <DialogTrigger asChild>
               <Button type="button" variant="outline">
-                <Eye className="h-4 w-4 mr-2" />
+                <Eye className="h-4 w-4" />
                 Preview
               </Button>
             </DialogTrigger>
@@ -634,12 +654,12 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 {isEditMode ? 'Updating...' : 'Creating...'}
               </>
             ) : (
               <>
-                <Save className="h-4 w-4 mr-2" />
+                <Save className="h-4 w-4" />
                 {isEditMode ? 'Update Property' : 'Create Property'}
               </>
             )}
@@ -777,6 +797,7 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
               isEditMode={isEditMode}
               onRemoveExisting={handleRemoveExistingMultimedia}
               onReorderPriorities={handleReorderPriorities}
+              onUnifiedOrderChange={handleUnifiedMultimediaOrder}
             />
           </CardContent>
         </Card>
@@ -804,12 +825,12 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 {isEditMode ? 'Updating...' : 'Creating...'}
               </>
             ) : (
               <>
-                <Save className="h-4 w-4 mr-2" />
+                <Save className="h-4 w-4" />
                 {isEditMode ? 'Update Property' : 'Create Property'}
               </>
             )}
