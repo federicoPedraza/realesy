@@ -10,10 +10,13 @@ export default function PropertiesPage() {
   const router = useRouter()
 
   // Fetch properties from Convex
-  const convexProperties = useQuery(api.properties.getProperties) || []
-
+  const convexProperties = useQuery(api.properties.getProperties)
+  
+  // Check if still loading
+  const isLoading = convexProperties === undefined
+  
   // Convert Convex properties to the format expected by PropertiesView
-  const properties = convexProperties.map(property => ({
+  const properties = (convexProperties || []).map(property => ({
     id: property._id, // Keep as string since Convex IDs are strings
     title: property.title,
     type: property.type,
@@ -38,6 +41,7 @@ export default function PropertiesPage() {
       <PropertiesView
         properties={properties}
         onAddProperty={handleAddProperty}
+        isLoading={isLoading}
       />
     </DashboardLayout>
   )

@@ -297,9 +297,9 @@ export const AmenitiesEditor: React.FC<AmenitiesEditorProps> = ({
                     "Star"
     
     setEditingExistingAmenity(amenityId)
-    setEditingName(amenityToEdit.editedAmenity?.name || amenityInfo.name)
+    setEditingName(amenityToEdit.editedAmenity?.name || amenityInfo.name || 'Amenity')
     setEditingIcon(iconName)
-    setEditingColor(amenityToEdit.editedAmenity?.color || amenityInfo.color)
+    setEditingColor(amenityToEdit.editedAmenity?.color || amenityInfo.color || "text-gray-600")
     setShowIconSelector(false)
     setShowColorSelector(false)
   }
@@ -343,6 +343,17 @@ export const AmenitiesEditor: React.FC<AmenitiesEditorProps> = ({
         name: propertyAmenity.editedAmenity.name,
         icon: IconComponent,
         color: propertyAmenity.editedAmenity.color
+      }
+    }
+
+    // Check for imported custom amenity data first (from CSV import)
+    if (propertyAmenity?.customAmenity) {
+      const IconComponent = ICON_OPTIONS.find(io => io.name === propertyAmenity.customAmenity!.icon)?.icon || Star
+      return {
+        id: amenityId,
+        name: propertyAmenity.customAmenity.name,
+        icon: IconComponent,
+        color: propertyAmenity.customAmenity.color
       }
     }
 

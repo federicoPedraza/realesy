@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus } from "lucide-react"
 import { Property } from "@/types/property"
 import { PropertyCard } from "./PropertyCard"
 
@@ -101,17 +101,21 @@ export const PropertiesView: React.FC<PropertiesViewProps> = ({
       </div>
 
       {isLoading ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-center py-8">
-            <div className="text-center text-muted-foreground">
-              <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
-              <p className="text-sm">Loading properties...</p>
-            </div>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <PropertyCardSkeleton key={index} />
-            ))}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <PropertyCardSkeleton key={index} />
+          ))}
+        </div>
+      ) : !isLoading && filteredProperties.length === 0 ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center text-muted-foreground">
+            <p className="text-lg font-medium mb-2">No properties found</p>
+            <p className="text-sm">
+              {searchQuery || propertyType !== "all" || propertyStatus !== "all" 
+                ? "Try adjusting your search criteria or filters."
+                : "No properties have been added yet."
+              }
+            </p>
           </div>
         </div>
       ) : (

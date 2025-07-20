@@ -6,11 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Skeleton } from "@/components/ui/skeleton"
-import { MapPin, Plus, ArrowLeft, ArrowRight, X, Flame, Waves, Car, Wifi, Tv, AirVent, Home, Pencil, Star, Calendar, Ruler, Users, Clock, Coffee, Camera, Music, Gamepad2, Utensils, Bed, Bath, Zap, Sun, Moon, Lock, Key, Dumbbell, Shield, TreePine, Building, ChevronUp } from "lucide-react"
+import { MapPin, Plus, ArrowLeft, ArrowRight, X, Flame, Waves, Car, Wifi, Tv, AirVent, Home, Pencil, Star, Calendar, Ruler, Users, Clock, Coffee, Camera, Music, Gamepad2, Utensils, Bed, Bath, Zap, Sun, Moon, Lock, Key, Dumbbell, Shield, TreePine, Building, ChevronUp, Share2 } from "lucide-react"
 import { Property } from "@/types/property"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
 import { Contact } from "./Contact"
+import { ShareModal } from "./ShareModal"
 
 // Rich Text Renderer Component
 const RichTextRenderer: React.FC<{ content: string }> = ({ content }) => {
@@ -47,6 +48,10 @@ const PropertyDetailSkeleton: React.FC = () => (
       <Button variant="outline" size="sm" disabled>
         <Pencil className="h-4 w-4 mr-2" />
         Edit Property
+      </Button>
+      <Button variant="outline" size="sm" disabled>
+        <Share2 className="h-4 w-4 mr-2" />
+        Share
       </Button>
     </div>
 
@@ -294,6 +299,17 @@ export const PropertyDetailView: React.FC<PropertyDetailViewProps> = ({
           <Pencil className="h-4 w-4 mr-2" />
           Edit Property
         </Button>
+        <ShareModal 
+          property={property}
+          customFields={customFields}
+          propertyAmenities={propertyAmenities}
+          multimedia={multimedia}
+        >
+          <Button variant="outline" size="sm">
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
+          </Button>
+        </ShareModal>
       </div>
 
       {/* Main Content */}

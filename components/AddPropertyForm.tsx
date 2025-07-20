@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { ArrowLeft, Save, Loader2, Bold, Italic, Underline, Eye } from "lucide-react"
+import { ArrowLeft, Save, Loader2, Bold, Italic, Underline, Eye, Upload } from "lucide-react"
 import { PhotoUpload } from "@/components/PhotoUpload"
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor"
 import { AmenitiesEditor } from "@/components/AmenitiesEditor"
 import { PropertyPreviewCard } from "@/components/PropertyPreviewCard"
+import { ImportModal } from "@/components/ImportModal"
 import { useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
@@ -317,6 +318,21 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
     setReorderedMultimediaPriorities(multimediaOrder)
   }
 
+  const handleImportData = (importedData: {
+    formData: PropertyFormData
+    customFields: CustomFieldFormData[]
+    amenities: PropertyAmenityFormData[]
+  }) => {
+    // Update form data
+    setFormData(importedData.formData)
+    
+    // Update custom fields
+    setCustomFields(importedData.customFields)
+    
+    // Update amenities
+    setAmenities(importedData.amenities)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -516,10 +532,21 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
 
   // Create a preview property object from current form data
   const createPreviewProperty = (): Property => {
-    // Get existing multimedia images (filter out removed ones)
+    // Create a map of multimedia ID to reordered priority
+    const reorderedPriorityMap = new Map<string, number>()
+    reorderedMultimediaPriorities.forEach(item => {
+      reorderedPriorityMap.set(item.multimediaId, item.priority)
+    })
+
+    // Get existing multimedia images (filter out removed ones) with proper ordering
     const existingImages = existingMultimedia
       .filter(m => m.type === 'image' && !removedMultimediaIds.includes(m._id))
-      .sort((a, b) => (a.priority || 0) - (b.priority || 0))
+      .map(m => ({
+        ...m,
+        // Use reordered priority if available, otherwise use original priority
+        priority: reorderedPriorityMap.get(m._id) ?? (m.priority || 0)
+      }))
+      .sort((a, b) => a.priority - b.priority)
       .map(m => m.url)
 
     // Convert uploaded files to image URLs for preview
@@ -568,6 +595,16 @@ export const AddPropertyForm: React.FC<AddPropertyFormProps> = ({
           <Button type="button" variant="outline" onClick={onBack}>
             Cancel
           </Button>
+          
+          {/* Import Button - Only show when not in edit mode */}
+          {!isEditMode && (
+            <ImportModal onImport={handleImportData}>
+              <Button type="button" variant="outline">
+                <Upload className="h-4 w-4 mr-2" />
+                Import
+              </Button>
+            </ImportModal>
+          )}
           
           {/* Preview Button */}
           <Dialog>
